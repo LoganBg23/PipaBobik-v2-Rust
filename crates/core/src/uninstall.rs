@@ -313,6 +313,28 @@ pub fn kill_other_instances(root: &Path) -> usize {
     n
 }
 
+/// Закриває інші PipaBobik.exe з цієї папки. true — серед них було вікно застосунку
+/// (тоді після оновлення його треба відкрити знову).
+pub fn close_instances(root: &Path) -> bool {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let me = std::process::id();
+    let target = root.join(EXE);
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_exe(UpdateKind::Always).with_cmd(UpdateKind::Always));
+    let mut panel = false;
+    for (pid, p) in sys.processes() {
+        if pid.as_u32() == me || p.thread_kind().is_some() || !p.exe().map(|e| same_path(e, &target)).unwrap_or(false) {
+            continue;
+        }
+        let modes = ["--bot", "--obs", "--live", "--paused", "--restart", "--update", "--apply-update", "--uninstall"];
+        if !p.cmd().iter().any(|c| modes.contains(&c.to_string_lossy().as_ref())) {
+            panel = true;
+        }
+        p.kill();
+    }
+    panel
+}
+
 fn same_path(a: &Path, b: &Path) -> bool {
     let norm = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf()).to_string_lossy().to_lowercase();
     norm(a) == norm(b)

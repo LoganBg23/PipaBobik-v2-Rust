@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>pipabobik</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  /* міні-плеєр: кольори й форми застосунку pipabobik */
+  :root { --night: #1c0716; --surface: #2a0d22; --raised: #3b1531; --line: #4e1f42; --hot: #ff3d9a; --blush: #ffb3d6; --pearl: #fdeaf4; --muted: #c592b2; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--night); }
+  body { font: 600 13px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--pearl); user-select: none; }
+  .card {
+    height: 100%; display: grid; grid-template-columns: 80px 1fr; gap: 12px; align-items: center; padding: 10px 12px 10px 10px;
+    background: radial-gradient(260px 140px at 100% 0, rgba(255, 61, 154, .22), transparent 70%), var(--surface);
+    border: 1px solid var(--line); cursor: grab;
+  }
+  .cover {
+    width: 80px; height: 80px; border-radius: 12px; background: var(--raised) center / cover no-repeat;
+    position: relative; overflow: hidden;
+  }
+  /* немає обкладинки — платівка */
+  .cover.nocover { background: repeating-radial-gradient(circle, #241020 0 2px, #170a14 2px 4px); border-radius: 50%; }
+  .cover.nocover::after { content: ""; position: absolute; inset: 31px; border-radius: 50%; background: var(--hot); }
+  .info { min-width: 0; display: grid; gap: 4px; }
+  .title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .artist { color: var(--muted); font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 3px; border-radius: 2px; background: var(--raised); overflow: hidden; margin: 2px 0 1px; }
+  .bar i { display: block; height: 100%; width: 100%; background: var(--hot); transform-origin: left; transform: scaleX(0); transition: transform 1s linear; }
+  .bar i.jump { transition: none; }
+  .row { display: flex; align-items: center; gap: 4px; }
+  .row .sp { flex: 1; }
+  button {
+    width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; color: var(--pearl);
+    display: grid; place-items: center; cursor: pointer;
+  }
+  button:hover { background: var(--raised); }
+  button:focus-visible { outline: 2px solid var(--blush); outline-offset: 1px; }
+  button svg { width: 18px; height: 18px; fill: currentColor; }
+  button.main { background: var(--hot); color: #fff; }
+  button.main:hover { background: #ff5aa9; }
+  button.heart.on { color: var(--hot); }
+  button:disabled { opacity: .35; cursor: default; background: transparent; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="card" id="card" title="Потягніть, щоб перемістити">
+  <div class="cover nocover" id="cover"></div>
+  <div class="info">
+    <div class="title" id="title">Нічого не грає</div>
+    <div class="artist" id="artist">pipabobik</div>
+    <div class="bar"><i id="fill"></i></div>
+    <div class="row">
+      <button class="main" id="play" aria-label="Пауза"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+      <button id="skip" aria-label="Пропустити трек" title="Пропустити"><svg viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg></button>
+      <button class="heart" id="like" aria-label="Лайкнути в YouTube Music" title="Лайкнути в YouTube Music"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.9 1.3-1.8 2.9-2.9 4.9-2.9 3.5 0 5.6 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
+      <span class="sp"></span>
+      <button id="full" aria-label="Відкрити повне вікно" title="Відкрити повне вікно"><svg viewBox="0 0 24 24"><path d="M4 4h7v2H7.4l4.3 4.3-1.4 1.4L6 7.4V11H4zM20 20h-7v-2h3.6l-4.3-4.3 1.4-1.4 4.3 4.3V13h2z"/></svg></button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const key = new URLSearchParams(location.search).get("key") || "";
+  const $ = (id) => document.getElementById(id);
+  const win = window.pipabobikWindow || null;  // є лише у вікні застосунку pipabobik
+  if (!win) $("full").hidden = true;
+  const icons = { pause: '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>', play: '<path d="M8 5l11 7-11 7z"/>' };
+  let state = null, receivedAt = 0, currentId = null, lastFrac = 0;
+
+  async function control(action, extra = {}) {
+    const r = await fetch("/api/control", { method: "POST", headers: { "Content-Type": "application/json", "X-Pipabobik-Key": key }, body: JSON.stringify({ action, ...extra }) });
+    if (r.ok) apply(await r.json());
+  }
+
+  // обкладинка: справжня, кадр з відео, а якщо обох немає — платівка
+  const seen = new Map();
+  const probe = (url) => new Promise((done) => {
+    if (!url) return done(false);
+    if (seen.has(url)) return done(seen.get(url));
+    const im = new Image();
+    const fin = (ok) => { seen.set(url, ok); done(ok); };
+    im.onload = () => fin(im.naturalWidth > 120);
+    im.onerror = () => fin(false);
+    setTimeout(() => fin(false), 8000);
+    im.src = url;
+  });
+  async function setCover(n) {
+    const urls = n ? [n.cover, n.video_id && `https://i.ytimg.com/vi/${n.video_id}/hqdefault.jpg`].filter(Boolean) : [];
+    let url = "";
+    for (const u of urls) { if (await probe(u)) { url = u; break; } }
+    if (!state || (state.now && state.now.video_id) !== (n && n.video_id)) return;
+    $("cover").style.backgroundImage = url ? `url("${url.replace(/"/g, "%22")}")` : "";
+    $("cover").classList.toggle("nocover", !url);
+  }
+
+  function apply(s) {
+    state = s; receivedAt = performance.now();
+    const n = s.now;
+    const id = n ? n.video_id : null;
+    if (id !== currentId) {
+      currentId = id;
+      $("title").textContent = n ? n.title : (s.active ? "Нічого не грає" : "Музику вимкнено");
+      $("artist").textContent = n ? (n.artist || (n.source === "request" ? `від @${n.requested_by}` : "")) : "pipabobik";
+      document.title = n ? `${n.title} — pipabobik` : "pipabobik";
+      setCover(n);
+      $("fill").classList.add("jump");
+    }
+    $("playIcon").innerHTML = s.status === "paused" ? icons.play : icons.pause;
+    $("play").setAttribute("aria-label", s.status === "paused" ? "Продовжити" : "Пауза");
+    $("play").disabled = $("skip").disabled = $("like").disabled = !n;
+    $("like").classList.toggle("on", !!(n && n.liked));
+    tick();
+  }
+
+  function tick() {
+    if (!state || document.hidden) return;
+    const n = state.now;
+    let frac = 0;
+    if (n && n.duration && state.status !== "loading") {
+      let el = n.elapsed || 0;
+      if (state.status === "playing") el += (performance.now() - receivedAt) / 1000;
+      frac = Math.min(1, el / n.duration);
+    }
+    const f = $("fill");
+    if (Math.abs(frac - lastFrac) > 0.05) f.classList.add("jump");
+    f.style.transform = `scaleX(${frac})`;
+    lastFrac = frac;
+    if (f.classList.contains("jump")) requestAnimationFrame(() => f.classList.remove("jump"));
+  }
+  setInterval(tick, 1000);
+
+  const connect = () => {
+    const es = new EventSource("/api/events");
+    es.onmessage = (e) => apply(JSON.parse(e.data));
+    es.onerror = () => { es.close(); setTimeout(connect, 2000); };
+  };
+  connect();
+
+  $("play").onclick = () => control("pause");
+  $("skip").onclick = () => state && state.now && control("skip", { video_id: state.now.video_id });
+  $("like").onclick = () => state && state.now && control("like", { video_id: state.now.video_id, like: !state.now.liked });
+  $("full").onclick = () => win && win("full");
+  // перетягування вікна за будь-яке місце, крім кнопок
+  $("card").addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || e.target.closest("button") || !win) return;
+    win("drag");
+  });
+})();
+</script>
+</body>
+</html>

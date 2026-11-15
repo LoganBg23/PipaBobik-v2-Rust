@@ -3,8 +3,8 @@
 //!   PipaBobik.exe                — вікно застосунку (запускає бота, якщо він ще не працює);
 //!   PipaBobik.exe --bot [--obs] [--live] [--paused] [-v]
 //!                                — сам бот без вікна (так його запускає скрипт OBS);
-//!   PipaBobik.exe --apply-update …
-//!                                — встановлення оновлення (запускає бот, людині не потрібно);
+//!   PipaBobik.exe --update …     — вікно «Оновлення pipabobik» (запускає бот кнопкою «Оновити»);
+//!   PipaBobik.exe --apply-update … — те саме для оновлення зі старих версій (2.0.1, 2.0.2);
 //!   PipaBobik.exe --uninstall    — видалити pipabobik (ярлик «Видалити pipabobik»).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -20,9 +20,9 @@ use pipabobik_core::config::{load_config, Config};
 use pipabobik_core::system::ObsWatch;
 use pipabobik_core::uninstall::{self, ask, Answer, Buttons};
 use pipabobik_core::{paths, proc, updater};
-use tauri::webview::NewWindowResponse;
+use tauri::webview::{NewWindowResponse, PageLoadEvent};
 use tauri::window::Color;
-use tauri::{Manager, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{Manager, PhysicalPosition, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 fn main() {
@@ -32,8 +32,8 @@ fn main() {
         println!("PipaBobik {}", updater::version());
         return;
     }
-    if has("--apply-update") {
-        std::process::exit(apply_update(&args));
+    if has("--update") || has("--apply-update") {
+        std::process::exit(run_update_window(&args));
     }
     if has("--uninstall-run") {
         std::process::exit(uninstall_run(&args));
@@ -52,21 +52,126 @@ fn arg_value(args: &[String], name: &str) -> String {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned().unwrap_or_default()
 }
 
-fn apply_update(args: &[String]) -> i32 {
-    let a = updater::ApplyArgs {
-        staged: PathBuf::from(arg_value(args, "--staged")),
+// ── вікно «Оновлення pipabobik» ──
+
+fn update_job(args: &[String]) -> updater::UpdateJob {
+    let staged = arg_value(args, "--staged");
+    updater::UpdateJob {
         target: PathBuf::from(arg_value(args, "--target")),
         tag: arg_value(args, "--tag"),
         message: arg_value(args, "--message"),
+        url: arg_value(args, "--url"),
+        size: arg_value(args, "--size").parse().unwrap_or(0),
         bot_pid: arg_value(args, "--bot-pid").parse().unwrap_or(0),
         obs_pid: arg_value(args, "--obs-pid").parse().unwrap_or(0),
         obs_exe: arg_value(args, "--obs-exe"),
         bot_args: serde_json::from_str(&arg_value(args, "--bot-args")).unwrap_or_default(),
-    };
-    if a.target.as_os_str().is_empty() || a.staged.as_os_str().is_empty() {
+        staged: (!staged.is_empty()).then(|| PathBuf::from(staged)),
+    }
+}
+
+/// Оновлення з вікном, де видно кожен крок. Якщо вікно не відкрилося — оновлюємо без нього.
+fn run_update_window(args: &[String]) -> i32 {
+    let job = update_job(args);
+    if job.target.as_os_str().is_empty() {
         return 2;
     }
-    updater::apply_update(a)
+    let from_temp = job.staged.is_none(); // копія з TEMP — після роботи видаляє себе
+    let events: Arc<std::sync::Mutex<Vec<serde_json::Value>>> = Arc::default();
+    let ok = Arc::new(AtomicBool::new(false));
+    let finished = Arc::new(AtomicBool::new(false));
+    let title = format!("pipabobik → {}", job.tag.trim_start_matches('v'));
+    let meta = if job.message.is_empty() { format!("Нова версія {}", job.tag) } else { job.message.clone() };
+    events.lock().unwrap().push(serde_json::json!({"type": "meta", "text": meta}));
+
+    let (ev, ok2, fin2) = (events.clone(), ok.clone(), finished.clone());
+    let ctx = tauri::generate_context!();
+    let built = tauri::Builder::default()
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            let ev_nav = ev.clone();
+            let h_nav = handle.clone();
+            let fin_nav = fin2.clone();
+            let win = WebviewWindowBuilder::new(app, "update", WebviewUrl::App("update.html".into()))
+                .title(&title)
+                .inner_size(440.0, 420.0)
+                .resizable(false)
+                .center()
+                .always_on_top(true)
+                .focused(true)
+                .background_color(Color(0x1c, 0x07, 0x16, 0xff))
+                // окрема папка WebView2: старе вікно застосунку ще може закриватися
+                .data_directory(std::env::temp_dir().join("pipabobik-update-webview"))
+                .initialization_script(BRIDGE)
+                .on_navigation(move |url| {
+                    if let Some(cmd) = bridge_cmd(url) {
+                        match cmd.as_str() {
+                            "ready" => {
+                                if let Some(w) = h_nav.get_webview_window("update") {
+                                    for e in ev_nav.lock().unwrap().iter() {
+                                        let _ = w.eval(format!("window.upd && window.upd({e})"));
+                                    }
+                                }
+                            }
+                            "close" if fin_nav.load(Ordering::SeqCst) => h_nav.exit(0),
+                            _ => {}
+                        }
+                        return false;
+                    }
+                    is_local(url)
+                })
+                .build()?;
+            let ev_job = ev.clone();
+            let w2 = win.clone();
+            let (ok3, fin3) = (ok2.clone(), fin2.clone());
+            std::thread::spawn(move || {
+                let emit = move |e: updater::Ev| {
+                    let j = e.json();
+                    ev_job.lock().unwrap().push(j.clone());
+                    let _ = w2.eval(format!("window.upd && window.upd({j})"));
+                };
+                let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("tokio");
+                let http = reqwest_client();
+                let good = rt.block_on(updater::run_job(job, http, emit));
+                ok3.store(good, Ordering::SeqCst);
+                fin3.store(true, Ordering::SeqCst);
+                // успіх — вікно закривається саме за кілька секунд; помилку людина закриває кнопкою
+                if good {
+                    std::thread::sleep(Duration::from_secs(4));
+                    handle.exit(0);
+                }
+            });
+            Ok(())
+        })
+        .on_window_event(move |window, event| {
+            // поки йде оновлення, вікно не закриваємо — інакше можна лишитися без бота
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if !finished.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.set_focus();
+                }
+            }
+        })
+        .build(ctx);
+    match built {
+        Ok(app) => app.run(|_, _| {}),
+        Err(e) => {
+            // без вікна: оновлюємо мовчки, кроки — у data\update.log
+            let _ = e;
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("tokio");
+            let job = update_job(args);
+            let good = rt.block_on(updater::run_job(job, reqwest_client(), |_| {}));
+            ok.store(good, Ordering::SeqCst);
+        }
+    }
+    if from_temp {
+        uninstall::delete_self_later();
+    }
+    if ok.load(Ordering::SeqCst) { 0 } else { 1 }
+}
+
+fn reqwest_client() -> pipabobik_core::Http {
+    pipabobik_core::http_client()
 }
 
 /// config.toml із коментарями: при першому запуску копіюємо зразок.
@@ -147,9 +252,174 @@ fn is_local(url: &Url) -> bool {
         || matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "tauri.localhost"))
 }
 
+// ── вікно застосунку, режим «поверх усіх вікон» і міні-плеєр ──
+
+/// Міст між сторінкою і вікном: сторінка «переходить» на службову адресу, а ми перехоплюємо
+/// цей перехід і виконуємо команду (pin, mini, full, drag). Так не потрібен доступ сторінки до IPC.
+const BRIDGE: &str = r#"(() => {
+  const h = location.hostname;
+  if (!["localhost", "127.0.0.1", "tauri.localhost"].includes(h) && location.protocol !== "tauri:") return;
+  window.pipabobikWindow = (cmd) => { location.href = "https://pipabobik-window.invalid/" + cmd; };
+})();"#;
+
+fn bridge_cmd(url: &Url) -> Option<String> {
+    (url.host_str() == Some("pipabobik-window.invalid")).then(|| url.path().trim_start_matches('/').to_string())
+}
+
+const MINI_W: f64 = 360.0;
+const MINI_H: f64 = 104.0;
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct WinPrefs {
+    #[serde(default)]
+    pinned: bool,
+    #[serde(default)]
+    mini_x: Option<i32>,
+    #[serde(default)]
+    mini_y: Option<i32>,
+}
+
+fn prefs_path() -> PathBuf {
+    paths::data_dir().join("window.json")
+}
+fn load_prefs() -> WinPrefs {
+    std::fs::read_to_string(prefs_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+fn save_prefs(p: &WinPrefs) {
+    let _ = std::fs::create_dir_all(paths::data_dir());
+    let _ = std::fs::write(prefs_path(), serde_json::to_string(p).unwrap_or_default());
+}
+
+/// Повідомляє сторінці застосунку, чи вікно закріплене поверх інших.
+fn tell_pinned(w: &WebviewWindow) {
+    let pinned = load_prefs().pinned;
+    let _ = w.eval(format!("window.onPipabobikWindow && window.onPipabobikWindow({{pinned: {pinned}}})"));
+}
+
+/// Обробник посилань для обох вікон: службові команди, свої сторінки, решта — у браузер.
+fn navigation(app: tauri::AppHandle) -> impl Fn(&Url) -> bool + Send + 'static {
+    move |url: &Url| {
+        if let Some(cmd) = bridge_cmd(url) {
+            let a = app.clone();
+            // окремий потік: команда виконується вже після того, як перехід скасовано
+            std::thread::spawn(move || window_cmd(&a, &cmd));
+            return false;
+        }
+        if is_local(url) && !url.path().starts_with("/auth") {
+            return true;
+        }
+        open_url(url.as_str());
+        false
+    }
+}
+
+fn window_cmd(app: &tauri::AppHandle, cmd: &str) {
+    match cmd {
+        "pin" => {
+            if let Some(w) = app.get_webview_window("main") {
+                let on = !load_prefs().pinned;
+                let _ = w.set_always_on_top(on);
+                let mut p = load_prefs();
+                p.pinned = on;
+                save_prefs(&p);
+                tell_pinned(&w);
+            }
+        }
+        "state" => {
+            if let Some(w) = app.get_webview_window("main") {
+                tell_pinned(&w);
+            }
+        }
+        "mini" => show_mini(app),
+        "full" => show_full(app),
+        "drag" => {
+            if let Some(m) = app.get_webview_window("mini") {
+                let _ = m.start_dragging();
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Міні-плеєр: маленьке вікно поверх усіх у правому нижньому куті (або там, де його залишили).
+fn show_mini(app: &tauri::AppHandle) {
+    let mini = match app.get_webview_window("mini") {
+        Some(m) => m,
+        None => {
+            let url = match Url::parse(&format!("http://localhost:{}/mini?key={}", port(), read_key())) {
+                Ok(u) => u,
+                Err(_) => return,
+            };
+            match WebviewWindowBuilder::new(app, "mini", WebviewUrl::External(url))
+                .title("pipabobik")
+                .inner_size(MINI_W, MINI_H)
+                .resizable(false)
+                .decorations(false)
+                .always_on_top(true)
+                .visible(false)
+                .background_color(Color(0x2a, 0x0d, 0x22, 0xff))
+                .initialization_script(BRIDGE)
+                .on_navigation(navigation(app.clone()))
+                .on_new_window(|url, _| {
+                    open_url(url.as_str());
+                    NewWindowResponse::Deny
+                })
+                .build()
+            {
+                Ok(m) => m,
+                Err(_) => return,
+            }
+        }
+    };
+    let main = app.get_webview_window("main");
+    let prefs = load_prefs();
+    let pos = match (prefs.mini_x, prefs.mini_y) {
+        (Some(x), Some(y)) => Some(PhysicalPosition::new(x, y)),
+        _ => {
+            // правий нижній кут робочої області (над панеллю задач) того екрана, де застосунок
+            let mon = main.as_ref().and_then(|w| w.current_monitor().ok().flatten()).or_else(|| mini.primary_monitor().ok().flatten());
+            mon.map(|m| {
+                let wa = m.work_area();
+                let sc = m.scale_factor();
+                let (w, h) = ((MINI_W * sc) as i32, (MINI_H * sc) as i32);
+                let gap = (16.0 * sc) as i32;
+                PhysicalPosition::new(wa.position.x + wa.size.width as i32 - w - gap, wa.position.y + wa.size.height as i32 - h - gap)
+            })
+        }
+    };
+    if let Some(p) = pos {
+        let _ = mini.set_position(p);
+    }
+    let _ = mini.show();
+    let _ = mini.set_always_on_top(true);
+    if let Some(w) = main {
+        let _ = w.hide();
+    }
+}
+
+/// Назад до повного вікна. Місце міні-плеєра запам'ятовується.
+fn show_full(app: &tauri::AppHandle) {
+    if let Some(m) = app.get_webview_window("mini") {
+        if m.is_visible().unwrap_or(false) {
+            if let Ok(p) = m.outer_position() {
+                let mut pr = load_prefs();
+                pr.mini_x = Some(p.x);
+                pr.mini_y = Some(p.y);
+                save_prefs(&pr);
+            }
+        }
+        let _ = m.hide();
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
 fn run_panel() {
     let port = port();
-    // ярлики в меню «Пуск» (і «Видалити pipabobik») та запис у «Параметри → Програми»
+    // ярлики в меню «Пуск» (і «Видалити pipabobik») та запис у «Програмах»
     std::thread::spawn(uninstall::register_if_needed);
     let closing = Arc::new(AtomicBool::new(false));
     let closing_ev = closing.clone();
@@ -157,30 +427,29 @@ fn run_panel() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // вдруге відкрили ярлик — показуємо вже відкрите вікно
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.unminimize();
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            show_full(app);
         }))
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
+            let pinned = load_prefs().pinned;
             let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("pipabobik")
                 .inner_size(480.0, 900.0)
                 .min_inner_size(380.0, 560.0)
+                .always_on_top(pinned)
                 .background_color(Color(0x1c, 0x07, 0x16, 0xff))
+                .initialization_script(BRIDGE)
                 // посилання назовні (YouTube, вхід у Twitch) — у звичайному браузері
-                .on_navigation(|url| {
-                    if is_local(url) && !url.path().starts_with("/auth") {
-                        return true;
-                    }
-                    open_url(url.as_str());
-                    false
-                })
+                .on_navigation(navigation(app.handle().clone()))
                 .on_new_window(|url, _features| {
                     open_url(url.as_str());
                     NewWindowResponse::Deny
+                })
+                // сторінка завантажилась — кажемо їй, чи вікно закріплене
+                .on_page_load(|w, p| {
+                    if p.event() == PageLoadEvent::Finished {
+                        tell_pinned(&w);
+                    }
                 })
                 .build()?;
             let handle = app.handle().clone();
@@ -189,6 +458,12 @@ fn run_panel() {
         })
         .on_window_event(move |window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                // міні-плеєр не закривається, а повертає повне вікно
+                if window.label() == "mini" {
+                    api.prevent_close();
+                    show_full(window.app_handle());
+                    return;
+                }
                 if closing_ev.load(Ordering::SeqCst) {
                     return;
                 }
@@ -220,7 +495,7 @@ fn run_panel() {
 }
 
 /// Запускає бота (якщо треба), відкриває застосунок і стежить, чи живі бот і OBS.
-fn panel_worker(app: tauri::AppHandle, win: tauri::WebviewWindow, port: u16) {
+fn panel_worker(app: tauri::AppHandle, win: WebviewWindow, port: u16) {
     let obs = ObsWatch::default();
     if !bot_running(port) {
         // OBS міг якраз запускати бота — даємо йому кілька секунд

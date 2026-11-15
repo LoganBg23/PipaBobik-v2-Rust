@@ -19,3 +19,10 @@ pub mod track;
 pub mod twitch;
 pub mod uninstall;
 pub mod updater;
+
+pub type Http = reqwest::Client;
+
+/// HTTP-клієнт для GitHub і YouTube (з переходами за посиланнями й таймаутом з'єднання).
+pub fn http_client() -> Http {
+    reqwest::Client::builder().gzip(true).connect_timeout(std::time::Duration::from_secs(15)).build().unwrap_or_default()
+}

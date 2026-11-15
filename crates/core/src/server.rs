@@ -30,6 +30,7 @@ const APP_HTML: &str = include_str!("../../../web/app.html");
 const WIDGET_HTML: &str = include_str!("../../../web/widget.html");
 const PANEL_HTML: &str = include_str!("../../../web/panel.html");
 const SETUP_HTML: &str = include_str!("../../../web/setup.html");
+const MINI_HTML: &str = include_str!("../../../web/mini.html");
 const ICO: &[u8] = include_bytes!("../../../web/static/pipabobik.ico");
 const DEMO_COVER: &[u8] = include_bytes!("../../../web/static/demo-cover.svg");
 
@@ -95,6 +96,7 @@ pub fn router(bot: Arc<Bot>) -> Router {
         .route("/panel", get(|| async { page(PANEL_HTML) }))
         .route("/app", get(app_page))
         .route("/setup", get(|| async { page(SETUP_HTML) }))
+        .route("/mini", get(|| async { page(MINI_HTML) }))
         .route("/favicon.ico", get(|| async { ([(header::CONTENT_TYPE, "image/x-icon")], ICO) }))
         .route("/static/pipabobik.ico", get(|| async { ([(header::CONTENT_TYPE, "image/x-icon")], ICO) }))
         .route("/static/demo-cover.svg", get(|| async { ([(header::CONTENT_TYPE, "image/svg+xml")], DEMO_COVER) }))
@@ -208,6 +210,24 @@ async fn api_control(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
                 jb.ban_current().await;
             }
         }
+        "ban_artist" => {
+            // ім'я напряму або виконавець треку (з того, що грає, черги чи історії)
+            let mut name = as_str(&d["artist"]).trim().to_string();
+            if name.is_empty() {
+                let vid = as_str(&d["video_id"]);
+                let found = jb.now().map(|(_, t)| t).filter(|t| vid.is_empty() || t.video_id == vid).or_else(|| jb.find_by_id(&vid));
+                name = found.and_then(|t| crate::jukebox::main_artist(&t)).unwrap_or_default();
+            }
+            match jb.ban_artist_now(&name).await {
+                None => return err(StatusCode::BAD_REQUEST, "Вкажіть ім'я виконавця"),
+                Some((removed, _)) => {
+                    let mut p = bot.payload();
+                    p["banned_artist"] = json!(name);
+                    p["removed"] = json!(removed);
+                    return Json(p).into_response();
+                }
+            }
+        }
         "pause" => jb.set_pause(!jb.player.paused()).await,
         "volume" => {
             let v = d["value"].as_f64().map(|f| f as i64).or_else(|| d["value"].as_str().and_then(|s| s.parse().ok())).unwrap_or_else(|| jb.player.volume());
@@ -300,8 +320,9 @@ async fn api_add(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
     let d = body(&b);
     let Some(track) = Track::from_json(&d["track"]) else { return err(StatusCode::BAD_REQUEST, "bad track") };
     let jb = &bot.jukebox;
-    if jb.is_banned(&track) {
-        return err(StatusCode::CONFLICT, format!("{} у бан-листі. Розбаньте його у вкладці «Історія», якщо хочете зіграти.", track.label()));
+    if let Some(r) = jb.banned_reason(&track) {
+        let r = r.trim_end_matches(" 🚫").trim_end_matches(" каналу").to_string();
+        return err(StatusCode::CONFLICT, format!("{r}. Розбаньте у вкладці «Історія», якщо хочете зіграти."));
     }
     if let Some(reason) = jb.filter_reason(&track).await {
         jb.ban_track(&track, &reason);

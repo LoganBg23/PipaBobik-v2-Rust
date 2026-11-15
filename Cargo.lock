@@ -2838,6 +2838,7 @@ name = "pipabobik"
 version = "2.0.0"
 dependencies = [
  "pipabobik-core",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",

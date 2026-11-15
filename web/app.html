@@ -44,6 +44,10 @@
   .logo { font-family: "Unbounded", sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--blush); }
   .logo b { color: var(--hot); font-weight: 800; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .winbtns { display: flex; gap: 4px; margin-left: auto; }
+  .ib[aria-pressed="true"] { background: var(--hot); color: #fff; }
+  .artban { align-self: flex-start; margin-top: 4px; color: var(--muted); font-weight: 700; font-size: 12px; }
+  .artban:hover { color: var(--blush); text-decoration: underline; }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 700; color: var(--muted); }
   .chip i { width: 7px; height: 7px; border-radius: 50%; background: #6b4560; }
   .chip.ok i { background: var(--ok); }
@@ -289,6 +293,10 @@
 <body>
 <header>
   <div class="logo">pipa<b>bobik</b></div>
+  <div class="winbtns" id="winBtns" hidden>
+    <button class="ib" id="pinBtn" aria-pressed="false" aria-label="Поверх усіх вікон" title="Поверх усіх вікон"><svg viewBox="0 0 24 24"><path d="M15 3l6 6-2.5.8-3.8 3.8.8 4.9-1.6 1.6-3.8-3.8L5 21.4 3.6 20l5.3-5.1-3.8-3.8 1.6-1.6 4.9.8 3.8-3.8z"/></svg></button>
+    <button class="ib" id="miniBtn" aria-label="Міні-плеєр у кутку екрана" title="Міні-плеєр у кутку екрана"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zm2 2v10h14V7zm6 4h7v5h-7z"/></svg></button>
+  </div>
   <div class="chips" id="chips"></div>
 </header>
 
@@ -313,6 +321,7 @@
     <div class="who" id="who"></div>
     <div class="t-title" id="title" style="margin-top:8px">Нічого не грає</div>
     <div class="t-artist" id="artist">Замовлення з чату з'являться тут</div>
+    <button class="artban" id="banArtistNow" hidden>Заборонити виконавця</button>
     <div class="progress"><span id="cur">0:00</span><div class="bar" id="seekBar" role="slider" tabindex="0" aria-label="Перемотати" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div class="clip"><div class="fill" id="fill"></div></div><div class="kpos" id="kpos"><i class="knob"></i></div></div><span id="dur">0:00</span></div>
     <div class="controls">
       <button class="round big" id="playBtn" aria-label="Пауза"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
@@ -428,7 +437,11 @@
     <div class="view" id="v-history" hidden>
       <div class="rowhead"><h3>Нещодавно грали</h3></div>
       <ul class="list" id="history"></ul>
-      <div class="rowhead" style="margin-top:16px"><h3>Заборонені треки</h3></div>
+      <div class="rowhead" style="margin-top:16px"><h3>Заборонені треки й виконавці</h3></div>
+      <form class="search" id="banArtistForm">
+        <input id="banArtistName" type="text" placeholder="Ім'я виконавця, якого не грати" autocomplete="off" aria-label="Ім'я виконавця">
+        <button class="ib pink" type="submit">Заборонити</button>
+      </form>
       <ul class="list" id="banned"></ul>
     </div>
 
@@ -512,6 +525,15 @@
     return data;
   }
   const control = (action, extra = {}) => api("/api/control", { action, ...extra });
+  // головний виконавець: «A feat. B», «A, B», «A & B» → A
+  const mainArtist = (a) => String(a || "").split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\sx\s)\s*/i)[0].trim();
+  async function banArtist(extra, name) {
+    if (!confirm(`Заборонити виконавця «${name}»?\n\nУсі його треки (і спільні) зникнуть з черги й більше не гратимуть — ні з чату, ні у фоні. Розбанити можна у вкладці «Історія».`)) return;
+    try {
+      const r = await control("ban_artist", extra);
+      toast(`Виконавця ${r.banned_artist || name} заборонено${r.removed ? ` · з черги прибрано: ${r.removed}` : ""}`);
+    } catch {}
+  }
 
   // ── стан ──
   const icons = {
@@ -542,6 +564,9 @@
     $("onairHint").textContent = s.active ? (s.status === "idle" ? "Увімкнено — чекаю на замовлення" : "Грає в ефірі")
       : (s.health && s.health.obs_live === false ? "Вимкнено — увімкнеться з початком трансляції" : "Вимкнено");
     if (!volDrag) { $("vol").value = s.volume; $("volv").textContent = s.volume; }
+    const artistNow = n ? mainArtist(n.artist) : "";
+    $("banArtistNow").hidden = !artistNow;
+    $("banArtistNow").textContent = artistNow ? `Заборонити виконавця ${artistNow}` : "";
     const liked = !!(n && n.liked);
     $("likeBtn").classList.toggle("on", liked);
     $("likeBtn").setAttribute("aria-pressed", liked);
@@ -580,6 +605,7 @@
     $("queue").innerHTML = s.queue.length ? s.queue.map((t, i) => trackRow(t, `
         <button class="ib" data-q="next" data-i="${i}" title="Зіграти наступним" aria-label="Зіграти наступним" ${i === 0 ? "disabled" : ""}>
           <svg viewBox="0 0 24 24"><path d="M5 4h14v3H5zM12 9l6 7h-4v4h-4v-4H6z"/></svg></button>
+        ${mainArtist(t.artist) ? `<button class="ib" data-banartist="${esc(t.video_id)}" data-name="${esc(mainArtist(t.artist))}" title="Заборонити виконавця ${esc(mainArtist(t.artist))}" aria-label="Заборонити виконавця"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6z"/><path d="M3 4.4L4.4 3 21 19.6 19.6 21z"/></svg></button>` : ""}
         <button class="ib" data-q="remove" data-i="${i}" title="Прибрати" aria-label="Прибрати з черги">
           <svg viewBox="0 0 24 24"><path d="M6.4 5L5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>`)).join("")
       : `<li class="empty"><b>Черга порожня</b>Глядачі замовляють командою в чаті, а ви — у вкладці «Додати».</li>`;
@@ -588,12 +614,13 @@
   function renderHistory(s) {
     $("history").innerHTML = (s.history || []).length ? s.history.map((t) => trackRow(t,
       `<button class="ib heart ${t.liked ? "on" : ""}" data-like="${esc(t.video_id)}" data-liked="${t.liked ? 1 : 0}" title="${t.liked ? "Прибрати лайк" : "Лайкнути в YouTube Music"}" aria-label="Лайк"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.9 1.3-1.8 2.9-2.9 4.9-2.9 3.5 0 5.6 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
+       ${mainArtist(t.artist) ? `<button class="ib" data-banartist="${esc(t.video_id)}" data-name="${esc(mainArtist(t.artist))}" title="Заборонити виконавця ${esc(mainArtist(t.artist))}" aria-label="Заборонити виконавця"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6z"/><path d="M3 4.4L4.4 3 21 19.6 19.6 21z"/></svg></button>` : ""}
        <button class="ib" data-again='${esc(JSON.stringify(t))}' title="Поставити в чергу ще раз">Ще раз</button>`)).join("")
       : `<li class="empty">Тут з'являться треки, що вже відіграли.</li>`;
     $("banned").innerHTML = (s.banned || []).length ? s.banned.map((b) =>
       `<li class="item" style="grid-template-columns:1fr auto"><div class="tt">${esc(b.label)}</div>
        <button class="ib" data-unban="${esc(b.video_id)}">Розбанити</button></li>`).join("")
-      : `<li class="empty">Заборонених треків немає.</li>`;
+      : `<li class="empty">Заборонених треків і виконавців немає.</li>`;
   }
 
   let restartFrom = null;
@@ -745,8 +772,10 @@
       try { await control("like", { video_id: lk.dataset.like, like: want }); toast(want ? "Лайкнуто в YouTube Music ♥" : "Лайк прибрано"); } catch {}
       return;
     }
+    const ba = e.target.closest("[data-banartist]");
+    if (ba) return banArtist({ video_id: ba.dataset.banartist }, ba.dataset.name);
     const un = e.target.closest("[data-unban]");
-    if (un) { await control("unban", { video_id: un.dataset.unban }); return toast("Розбанено — фільтр його більше не чіпатиме"); }
+    if (un) { await control("unban", { video_id: un.dataset.unban }); return toast(un.dataset.unban.startsWith("artist:") ? "Виконавця розбанено" : "Розбанено — фільтр його більше не чіпатиме"); }
     const again = e.target.closest("[data-again]");
     if (again) { try { await api("/api/add", { track: JSON.parse(again.dataset.again), mode: "end" }); toast("Додано в чергу"); } catch {} return; }
     const add = e.target.closest("[data-add]");
@@ -1058,7 +1087,7 @@
     btn.title = u.available ? `Нова версія: ${u.message}` : (u.current_known ? `Установлено ${u.current} — остання версія` : "Перевірити, чи є нова версія на GitHub");
     const bar = $("updBar");
     bar.hidden = !u.available || (u.latest === updLaterSha && !busy);
-    $("updMsg").textContent = u.current_known ? (u.message || "")
+    $("updMsg").textContent = u.current_known ? (u.message || "") + (u.downloaded ? " · уже завантажено з GitHub" : "")
       : `Остання: ${u.message || u.latest}. Після першого оновлення бот сам стежитиме за новими версіями.`;
     $("updNotes").innerHTML = (u.notes || []).map((n) => `<li>${esc(n)}</li>`).join("");
     $("updNotesWrap").hidden = (u.notes || []).length < 2;
@@ -1067,9 +1096,8 @@
     if (u.state === "installing" && !restartFrom) {
       restartFrom = s.boot || "?";
       $("offTitle").textContent = "Оновлюю pipabobik…";
-      $("offText").textContent = s.obs_restart
-        ? "Закрию й знову відкрию OBS — до хвилини. Вікно оновиться саме."
-        : "Кілька секунд — і все повернеться. Черга й налаштування на місці.";
+      $("offText").textContent = "Зараз відкриється вікно «Оновлення pipabobik»: там видно, як нова версія завантажується з GitHub і встановлюється. "
+        + (s.obs_restart ? "OBS закриється й відкриється знову." : "Застосунок відкриється сам.");
       $("offline").classList.add("show");
     }
     if (u.just_updated && !shownUpdated) {
@@ -1083,8 +1111,8 @@
     const how = s.streaming
       ? "Йде трансляція, тож OBS не закриватиму: оновиться лише бот, музика замовкне на кілька секунд. Скрипт OBS оновиться, коли наступного разу відкриєте OBS."
       : s.obs_restart
-        ? "pipabobik завантажить нову версію, закриє OBS і відкриє його знову (до хвилини). Черга й налаштування збережуться."
-        : "pipabobik завантажить нову версію й перезапуститься. Черга й налаштування збережуться.";
+        ? "pipabobik завантажить нову версію з GitHub, закриє OBS і відкриє його знову (до хвилини). Черга й налаштування збережуться."
+        : "pipabobik завантажить нову версію з GitHub і перезапуститься. Черга й налаштування збережуться.";
     if (!confirm(`Оновити pipabobik?\n\n${how}`)) return;
     try { await api("/api/update", { action: "install" }); } catch {}
   }
@@ -1102,6 +1130,24 @@
       toast(r.available ? `Є нова версія: ${r.message}` : (r.error || "У вас остання версія"));
     } catch {}
   };
+
+  // ── вікно застосунку: поверх інших вікон і міні-плеєр (лише у вікні pipabobik, не в браузері) ──
+  $("banArtistNow").onclick = () => state && state.now && banArtist({ video_id: state.now.video_id }, mainArtist(state.now.artist));
+  $("banArtistForm").onsubmit = (e) => {
+    e.preventDefault();
+    const name = $("banArtistName").value.trim();
+    if (!name) return;
+    banArtist({ artist: name }, name).then(() => { $("banArtistName").value = ""; });
+  };
+  if (window.pipabobikWindow) {
+    $("winBtns").hidden = false;
+    window.onPipabobikWindow = (w) => {
+      $("pinBtn").setAttribute("aria-pressed", w.pinned ? "true" : "false");
+      $("pinBtn").title = w.pinned ? "Поверх усіх вікон — увімкнено" : "Поверх усіх вікон";
+    };
+    $("pinBtn").onclick = () => window.pipabobikWindow("pin");
+    $("miniBtn").onclick = () => window.pipabobikWindow("mini");
+  }
 
   $("quitBtn").onclick = () => { if (confirm("Вимкнути pipabobik? Музика зупиниться, черга збережеться.")) control("shutdown"); };
 })();

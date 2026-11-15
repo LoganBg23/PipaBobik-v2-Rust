@@ -99,7 +99,7 @@ async fn api_matches_v1() {
     // команди й ролі
     let (s, acc) = t.get("/api/access").await;
     assert_eq!(s, 200);
-    assert_eq!(acc["commands"].as_array().unwrap().len(), 11);
+    assert_eq!(acc["commands"].as_array().unwrap().len(), 12);
     assert_eq!(acc["limits"]["all"]["cooldown"], 45);
     let (s, e) = t.post("/api/access", json!({"commands": {"now": {"names": ["!скіп"]}}})).await;
     assert_eq!(s, 400);
@@ -133,7 +133,7 @@ async fn api_matches_v1() {
     assert_eq!(up["current_known"], true);
 
     // сторінки
-    for p in ["/widget", "/panel", "/app", "/setup", "/favicon.ico", "/"] {
+    for p in ["/widget", "/panel", "/app", "/setup", "/mini", "/favicon.ico", "/"] {
         let r = t.http.get(format!("{}{p}", t.base)).send().await.unwrap();
         assert_eq!(r.status().as_u16(), 200, "{p}");
     }

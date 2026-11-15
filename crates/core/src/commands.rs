@@ -48,7 +48,7 @@ pub struct Commands {
     table: RwLock<HashMap<String, String>>,
 }
 
-const KEYS: &[&str] = &["request", "now", "skip", "queue", "wrong", "volume", "seek", "pause", "play", "ban", "help"];
+const KEYS: &[&str] = &["request", "now", "skip", "queue", "wrong", "volume", "seek", "pause", "play", "ban", "ban_artist", "help"];
 
 impl Commands {
     pub fn new(cfg: Arc<RwLock<Config>>, jb: Arc<Jukebox>, music: Arc<MusicSource>, say: Say) -> Arc<Self> {
@@ -109,6 +109,7 @@ impl Commands {
             "pause" => self.cmd_pause(&m).await,
             "play" => self.cmd_play(&m).await,
             "ban" => self.cmd_ban(&m, &arg).await,
+            "ban_artist" => self.cmd_ban_artist(&m, &arg).await,
             "help" => self.cmd_help(&m).await,
             _ => {}
         }
@@ -215,6 +216,7 @@ impl Commands {
             ("pause", c("pause")),
             ("play", c("play")),
             ("ban", format!("{} [назва] — заборонити пісню", c("ban"))),
+            ("ban_artist", format!("{} [виконавець] — заборонити виконавця", c("ban_artist"))),
         ];
         if self.privileged(m) {
             hints[4].1 = format!("{} [назва] — пропустити", c("skip"));
@@ -316,6 +318,25 @@ impl Commands {
             self.jb.set_pause(false).await;
         }
         self.reply(m, "▶ граємо").await;
+    }
+
+    /// Без імені — забороняє виконавця того, що грає. З іменем — саме цього виконавця.
+    async fn cmd_ban_artist(&self, m: &ChatMessage, arg: &str) {
+        let name = if arg.is_empty() {
+            match self.jb.now().and_then(|(_, t)| crate::jukebox::main_artist(&t)) {
+                Some(a) => a,
+                None => return self.reply(m, format!("зараз нічого не грає. Щоб заборонити виконавця: {} ім'я", self.first("ban_artist"))).await,
+            }
+        } else {
+            arg.to_string()
+        };
+        match self.jb.ban_artist_now(&name).await {
+            None => self.reply(m, format!("напиши ім'я: {} виконавець", self.first("ban_artist"))).await,
+            Some((removed, _)) => {
+                let q = if removed > 0 { format!(", з черги прибрано треків: {removed}") } else { String::new() };
+                self.reply(m, format!("🚫 {name} більше не гратиме на каналі{q}")).await
+            }
+        }
     }
 
     /// Без назви — забороняє те, що грає. З назвою — саме цю пісню (усі її версії).

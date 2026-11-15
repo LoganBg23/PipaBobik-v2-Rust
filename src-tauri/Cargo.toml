@@ -19,6 +19,7 @@ tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 tracing = "0.1"
+serde = { version = "1", features = ["derive"] }
 
 [features]
 # сторінку «Запускаю бота…» вбудовуємо в .exe і без tauri-cli

@@ -305,20 +305,22 @@ impl Bot {
         self.shutdown();
     }
 
-    /// Завантажує нову версію і передає її новому PipaBobik.exe; той перезапустить OBS чи бота.
+    /// Запускає вікно «Оновлення pipabobik» (копія PipaBobik.exe з тимчасової папки) і закривається.
+    /// Саме воно завантажує нову версію з GitHub, міняє файли й запускає все знову.
     pub async fn install_update(self: &Arc<Self>) {
         let up = &self.updates;
         let st = up.state();
         if st == "downloading" || st == "installing" {
             return;
         }
-        let new = match up.stage().await {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::error!("Не вдалося завантажити оновлення: {e}");
-                up.set("error", &format!("Не вдалося завантажити оновлення: {e}"));
-                return;
-            }
+        if up.latest()["url"].as_str().is_none() {
+            up.check().await;
+        }
+        let latest = up.latest();
+        let Some(url) = latest["url"].as_str().map(String::from) else {
+            let e = up.error();
+            up.set("error", if e.is_empty() { "На GitHub немає файлу нової версії" } else { &e });
+            return;
         };
         up.set("installing", "");
         // OBS перезапускаємо лише коли точно знаємо, що трансляція не йде
@@ -329,19 +331,31 @@ impl Bot {
                 obs_exe = exe;
             }
         }
-        let latest = up.latest();
         let tag = latest["tag"].as_str().unwrap_or("").to_string();
         let message = latest["message"].as_str().unwrap_or("").to_string();
+        // запущений PipaBobik.exe не можна замінити — оновлює його копія з TEMP
+        let copy = match std::env::current_exe().and_then(|exe| {
+            let dest = std::env::temp_dir().join(format!("pipabobik-update-{}{}", std::process::id(), if cfg!(windows) { ".exe" } else { "" }));
+            std::fs::copy(&exe, &dest).map(|_| dest)
+        }) {
+            Ok(c) => c,
+            Err(e) => {
+                up.set("error", &format!("Не вдалося почати оновлення: {e}"));
+                return;
+            }
+        };
         let args = vec![
-            "--apply-update".to_string(),
-            "--staged".into(),
-            new.to_string_lossy().into_owned(),
+            "--update".to_string(),
             "--target".into(),
             paths::root().to_string_lossy().into_owned(),
             "--tag".into(),
             tag.clone(),
             "--message".into(),
             message.clone(),
+            "--url".into(),
+            url,
+            "--size".into(),
+            latest["size"].as_u64().unwrap_or(0).to_string(),
             "--bot-pid".into(),
             std::process::id().to_string(),
             "--obs-pid".into(),
@@ -352,9 +366,9 @@ impl Bot {
             serde_json::to_string(&self.restart_args()).unwrap_or_else(|_| "[]".into()),
         ];
         tracing::info!("Оновлення до {tag}: {message} (OBS {})", if obs_pid != 0 { "перезапуститься" } else { "не чіпаємо" });
-        tokio::time::sleep(Duration::from_millis(500)).await; // застосунок встигає показати «Оновлюю…»
+        tokio::time::sleep(Duration::from_millis(400)).await; // застосунок встигає показати «Оновлюю…»
         paths::touch_restart_mark();
-        if let Err(e) = crate::proc::spawn_detached(&new.join(updater::EXE), &args, &new) {
+        if let Err(e) = crate::proc::spawn_detached(&copy, &args, &std::env::temp_dir()) {
             tracing::error!("Не вдалося запустити оновлення: {e}");
             up.set("error", &format!("Не вдалося запустити оновлення: {e}"));
             return;

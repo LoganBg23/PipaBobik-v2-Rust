@@ -29,6 +29,7 @@ pub fn defaults() -> Value {
             "pause": ["!пауза", "!pause"],
             "play": ["!грай", "!play"],
             "ban": ["!бантрек"],
+            "ban_artist": ["!банвиконавця", "!banartist"],
             "help": ["!музика", "!pipabobik"]
         },
         "permissions": Value::Object(default_permissions(None)),

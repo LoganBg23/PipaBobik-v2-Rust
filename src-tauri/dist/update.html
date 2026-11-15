@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Оновлення pipabobik</title>
+<style>
+  /* кольори застосунку pipabobik */
+  :root { --night: #1c0716; --surface: #2a0d22; --raised: #3b1531; --line: #4e1f42; --hot: #ff3d9a; --blush: #ffb3d6; --pearl: #fdeaf4; --muted: #c592b2; --ok: #8ff0c8; --bad: #ff8fab; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 500 13.5px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--pearl);
+    background: radial-gradient(420px 260px at 90% -20%, rgba(255, 61, 154, .25), transparent 70%), var(--night);
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; user-select: none; overflow: hidden;
+  }
+  h1 { font-size: 17px; font-weight: 700; color: var(--blush); }
+  h1 b { color: var(--hot); }
+  .sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  ol { list-style: none; display: grid; gap: 7px; }
+  li { display: grid; grid-template-columns: 20px 1fr; gap: 9px; align-items: start; color: var(--muted); }
+  li .t { min-width: 0; }
+  li .t small { display: block; font-size: 12px; color: var(--muted); opacity: .85; }
+  li .i { width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+  li.active { color: var(--pearl); }
+  li.active .i { border-color: var(--hot); border-top-color: transparent; animation: spin .8s linear infinite; }
+  li.done { color: var(--pearl); }
+  li.done .i { border-color: var(--ok); background: var(--ok); color: var(--night); }
+  li.done .i::after { content: "✓"; }
+  li.skip .i { border-style: dashed; }
+  li.fail { color: var(--bad); }
+  li.fail .i { border-color: var(--bad); background: var(--bad); color: var(--night); }
+  li.fail .i::after { content: "!"; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .bar { height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden; margin-top: 5px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--hot); border-radius: 3px; transition: width .2s linear; }
+  .end { margin-top: auto; display: flex; align-items: center; gap: 10px; }
+  .end p { flex: 1; font-weight: 700; }
+  .end p.ok { color: var(--ok); }
+  .end p.bad { color: var(--bad); }
+  button { font: inherit; font-weight: 700; color: #fff; background: var(--hot); border: 0; border-radius: 12px; padding: 8px 16px; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--blush); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { li.active .i { animation: none; border-top-color: var(--hot); } .bar i { transition: none; } }
+</style>
+</head>
+<body>
+  <header>
+    <h1>pipa<b>bobik</b> оновлюється</h1>
+    <div class="sub" id="sub">Нова версія завантажується з GitHub. Нічого не закривайте — це займе до хвилини.</div>
+  </header>
+  <ol id="steps">
+    <li data-k="wait"><span class="i"></span><span class="t">Закриваю pipabobik<small></small></span></li>
+    <li data-k="download"><span class="i"></span><span class="t">Завантажую з GitHub<small></small><div class="bar" hidden><i></i></div></span></li>
+    <li data-k="verify"><span class="i"></span><span class="t">Перевіряю архів<small></small></span></li>
+    <li data-k="obs"><span class="i"></span><span class="t">Закриваю OBS<small></small></span></li>
+    <li data-k="backup"><span class="i"></span><span class="t">Резервна копія<small></small></span></li>
+    <li data-k="files"><span class="i"></span><span class="t">Замінюю файли<small></small></span></li>
+    <li data-k="launch"><span class="i"></span><span class="t">Запускаю знову<small></small></span></li>
+  </ol>
+  <div class="end">
+    <p id="result" role="status" aria-live="polite"></p>
+    <button id="close" hidden>Закрити</button>
+  </div>
+<script>
+  const li = (k) => document.querySelector(`li[data-k="${k}"]`);
+  const mb = (b) => (b / 1048576).toFixed(1);
+  // події приходять із PipaBobik.exe (webview.eval)
+  window.upd = (ev) => {
+    if (ev.type === "meta") {
+      document.getElementById("sub").textContent = ev.text;
+    } else if (ev.type === "step") {
+      const el = li(ev.key);
+      if (!el) return;
+      el.className = ev.state;
+      el.querySelector("small").textContent = ev.text || "";
+      if (ev.key === "download" && ev.state !== "active") el.querySelector(".bar").hidden = true;
+    } else if (ev.type === "progress") {
+      const el = li("download");
+      el.className = "active";
+      const bar = el.querySelector(".bar");
+      bar.hidden = false;
+      const pct = ev.total ? Math.min(100, ev.done / ev.total * 100) : 0;
+      bar.firstElementChild.style.width = pct + "%";
+      el.querySelector("small").textContent = ev.total ? `${mb(ev.done)} з ${mb(ev.total)} МБ · ${Math.round(pct)}%` : `${mb(ev.done)} МБ`;
+    } else if (ev.type === "done" || ev.type === "fail") {
+      const r = document.getElementById("result");
+      r.textContent = ev.text;
+      r.className = ev.type === "done" ? "ok" : "bad";
+      const btn = document.getElementById("close");
+      btn.hidden = false;
+      btn.focus();
+      document.querySelectorAll("li.active").forEach((x) => { x.className = ev.type === "done" ? "done" : "fail"; });
+    }
+  };
+  document.getElementById("close").onclick = () => { location.href = "https://pipabobik-window.invalid/close"; };
+  // сторінка готова — просимо надіслати все, що вже сталося
+  addEventListener("load", () => { location.href = "https://pipabobik-window.invalid/ready"; });
+</script>
+</body>
+</html>

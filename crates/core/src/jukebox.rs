@@ -104,6 +104,16 @@ pub fn norm(text: &str) -> String {
     NON_WORD.replace_all(&t, " ").split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Ключ виконавця в бан-листі: «Океан Ельзи» і «ОКЕАН ЕЛЬЗИ» — один і той самий.
+pub fn artist_key(name: &str) -> String {
+    format!("artist:{}", crate::rufilter::norm(name).trim_end_matches(" - topic"))
+}
+
+/// Головний виконавець треку: «A feat. B» → A.
+pub fn main_artist(t: &Track) -> Option<String> {
+    crate::rufilter::split_artists(&t.artist).into_iter().next().filter(|a| !a.trim().is_empty())
+}
+
 /// Ключ пісні без версій: «Обійми (Official Video)» і «Обійми (Live)» — одна пісня.
 pub fn song_key(t: &Track) -> String {
     let clean = BRACKETS.replace_all(&t.title, " ").into_owned();
@@ -291,8 +301,8 @@ impl Jukebox {
     /// Причина відмови або None, якщо трек можна додати.
     /// limits — ліміти ролі глядача (див. access.rs); без них діють загальні правила.
     pub fn check(&self, track: &Track, privileged: bool, limits: Option<&Limits>) -> Option<String> {
-        if self.is_banned(track) {
-            return Some(format!("{} у бан-листі каналу 🚫", track.label()));
+        if let Some(r) = self.banned_reason(track) {
+            return Some(r);
         }
         let text = format!("{} {}", track.title, track.artist).to_lowercase();
         let (words, block_explicit) = {
@@ -436,7 +446,7 @@ impl Jukebox {
         self.mutate(|st| {
             st.banned_ids.remove(video_id);
             st.banned_meta.remove(video_id);
-            if !video_id.starts_with("song:") {
+            if !video_id.contains(':') {
                 st.allowed_ids.insert(video_id.into());
             }
         });
@@ -452,7 +462,56 @@ impl Jukebox {
     }
 
     fn banned_in(st: &St, t: &Track) -> bool {
-        st.banned_ids.contains(&t.video_id) || st.banned_ids.contains(&song_key(t))
+        st.banned_ids.contains(&t.video_id) || st.banned_ids.contains(&song_key(t)) || Self::banned_artist(st, t).is_some()
+    }
+
+    /// Заборонений виконавець цього треку (з усіх, хто вказаний: «A feat. B» — і A, і B).
+    fn banned_artist(st: &St, t: &Track) -> Option<String> {
+        if t.artist.trim().is_empty() {
+            return None;
+        }
+        std::iter::once(t.artist.clone())
+            .chain(crate::rufilter::split_artists(&t.artist))
+            .find(|a| st.banned_ids.contains(&artist_key(a)))
+    }
+
+    /// Чому трек не можна грати через бан-лист (None — можна).
+    pub fn banned_reason(&self, t: &Track) -> Option<String> {
+        let st = self.st.lock().unwrap();
+        if let Some(a) = Self::banned_artist(&st, t) {
+            return Some(format!("виконавець {a} заборонений на каналі 🚫"));
+        }
+        Self::banned_in(&st, t).then(|| format!("{} у бан-листі каналу 🚫", t.label()))
+    }
+
+    /// Забороняє виконавця: усі його треки (і спільні — «feat.») більше не гратимуть.
+    /// Повертає, скільки треків прибрано з черги.
+    pub fn ban_artist(&self, name: &str) -> Option<usize> {
+        let name = name.trim().trim_end_matches(" - Topic").trim().to_string();
+        let key = artist_key(&name);
+        if key == "artist:" {
+            return None;
+        }
+        Some(self.mutate(|st| {
+            st.banned_ids.insert(key.clone());
+            st.banned_meta.insert(key.clone(), format!("Виконавець: {name}"));
+            let before = st.queue.len();
+            let q = std::mem::take(&mut st.queue);
+            st.queue = q.into_iter().filter(|t| !Self::banned_in(st, t)).collect();
+            before - st.queue.len()
+        }))
+    }
+
+    /// Забороняє виконавця і пропускає поточний трек, якщо він його.
+    pub async fn ban_artist_now(&self, name: &str) -> Option<(usize, bool)> {
+        let removed = self.ban_artist(name)?;
+        let mut skipped = false;
+        if let Some((id, t)) = self.now() {
+            if self.is_banned(&t) {
+                skipped = self.skip(&format!("виконавця {name} заборонено"), Some(id)).await.is_some();
+            }
+        }
+        Some((removed, skipped))
     }
 
     pub fn is_banned(&self, track: &Track) -> bool {
@@ -469,6 +528,12 @@ impl Jukebox {
             st.queue = q.into_iter().filter(|t| !Self::banned_in(st, t)).collect();
         });
         key
+    }
+
+    /// Трек за id: черга, потім історія.
+    pub fn find_by_id(&self, video_id: &str) -> Option<Track> {
+        let st = self.st.lock().unwrap();
+        st.queue.iter().chain(st.history.iter().rev()).find(|t| t.video_id == video_id).cloned()
     }
 
     /// Трек за назвою: спершу той, що грає, потім черга, потім нещодавно зіграні. «3» — третій у черзі.
@@ -1089,6 +1154,22 @@ mod tests {
         assert_eq!(jb.queue_len(), 1);
         assert!(jb.is_banned(&a));
         assert!(jb.check(&a, false, None).unwrap().contains("бан-листі"));
+    }
+
+    #[tokio::test]
+    async fn bans_artists() {
+        let (jb, _d) = setup(Arc::new(FakePlayer::new(100.0)), src(0));
+        jb.add(t("a", "Обійми", "Океан Ельзи"), "u", "u", false);
+        jb.add(t("b", "Пісня", "Хтось feat. ОКЕАН ЕЛЬЗИ"), "u", "u", false);
+        jb.add(t("c", "Інша", "Хтось"), "u", "u", false);
+        assert_eq!(jb.ban_artist("океан ельзи"), Some(2));
+        assert_eq!(jb.queue_len(), 1);
+        assert!(jb.check(&t("d", "Без бою", "Океан Ельзи"), true, None).unwrap().contains("виконавець"));
+        assert!(jb.state()["banned"].as_array().unwrap().iter().any(|b| b["label"] == "Виконавець: океан ельзи"));
+        jb.unban(&artist_key("Океан Ельзи"));
+        assert!(jb.check(&t("d", "Без бою", "Океан Ельзи"), true, None).is_none());
+        assert_eq!(jb.ban_artist("  "), None);
+        assert_eq!(main_artist(&t("x", "y", "A feat. B")).as_deref(), Some("A"));
     }
 
     #[tokio::test]
