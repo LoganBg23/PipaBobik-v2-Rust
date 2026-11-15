@@ -4,9 +4,34 @@
 <title>pipabobik</title>
 <style>
   html, body { height: 100%; margin: 0; }
-  body { display: grid; place-items: center; background: #1c0716; color: #fdeaf4; font: 600 15px/1.5 system-ui, sans-serif; text-align: center; }
+  body { display: flex; flex-direction: column; background: #1c0716; color: #fdeaf4; font: 600 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  /* та сама смуга, що й у застосунку: поки бот стартує, вікно можна тягнути, згорнути й закрити */
+  .bar { height: 32px; flex: none; display: flex; align-items: center; gap: 10px; padding-left: 12px; font-size: 12px; font-weight: 400; color: #e3c9d8;
+    background: rgba(255, 214, 234, .06); border-bottom: 1px solid rgba(255, 255, 255, .05); user-select: none; }
+  .bar span { flex: 1; }
+  .bar button { width: 46px; height: 32px; border: 0; background: none; color: #fdeaf4; display: grid; place-items: center; cursor: pointer; }
+  .bar button:hover { background: rgba(255, 255, 255, .08); }
+  .bar button.x:hover { background: #c42b1c; }
+  main { flex: 1; display: grid; place-items: center; text-align: center; }
   b { display: block; font-size: 20px; color: #ffb3d6; margin-bottom: 6px; }
-  small { color: #c592b2; }
+  small { color: #c592b2; font-weight: 400; }
 </style>
-<body><div><b>pipabobik</b><span id="t">Запускаю бота…</span><br><small>Кілька секунд</small></div></body>
+<body>
+<div class="bar" id="bar" hidden>
+  <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#ff3d9a"/><circle cx="8" cy="8" r="2" fill="#1c0716"/></svg>
+  <span>pipabobik</span>
+  <button id="mn" aria-label="Згорнути"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg></button>
+  <button class="x" id="cl" aria-label="Закрити"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
+</div>
+<main><div><b>pipabobik</b><span id="t">Запускаю бота…</span><br><small>Кілька секунд</small></div></main>
+<script>
+  if (window.pipabobikWindow) {
+    const w = window.pipabobikWindow, bar = document.getElementById("bar");
+    bar.hidden = false;
+    bar.addEventListener("mousedown", (e) => { if (e.button === 0 && !e.target.closest("button")) { e.preventDefault(); w("drag"); } });
+    document.getElementById("mn").onclick = () => w("minimize");
+    document.getElementById("cl").onclick = () => w("close");
+  }
+</script>
+</body>
 </html>

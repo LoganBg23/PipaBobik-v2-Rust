@@ -7,497 +7,746 @@
 <link rel="icon" href="/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700&display=swap" rel="stylesheet">
 <style>
   :root {
     --night: #1c0716;     /* основа — нічна слива */
-    --surface: #2a0d22;   /* картки */
+    --surface: #2a0d22;   /* картки, рядки налаштувань */
     --raised: #3b1531;    /* кнопки, поля */
     --line: #4e1f42;
-    --hot: #ff3d9a;       /* головний акцент */
+    --hot: #ff3d9a;       /* акцент: прогрес, вибрана вкладка */
+    --accent: #d6197a;    /* заливка головних кнопок і перемикачів — контраст з білим тексту */
     --blush: #ffb3d6;
     --pearl: #fdeaf4;     /* текст */
+    --soft: #e3c9d8;      /* другорядний текст на картці */
     --muted: #c592b2;
     --ok: #8ff0c8;
     --warn: #ffcf70;
-    --r-lg: 22px; --r-md: 14px; --r-sm: 10px;
+    --bad: #ff8fa8;
+    --acc: #ffb3d6;       /* колір з обкладинки (ставить скрипт) */
+    --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { color-scheme: dark; }
-  body {
-    font: 500 14px/1.45 "Manrope", system-ui, sans-serif;
-    color: var(--pearl);
-    background:
-      radial-gradient(600px 380px at 85% -10%, rgba(255, 61, 154, .22), transparent 70%),
-      radial-gradient(500px 300px at -10% 110%, rgba(197, 139, 255, .12), transparent 70%),
-      var(--night);
-    min-height: 100vh;
-    padding: 16px 16px 20px;
-  }
+  html { color-scheme: dark; height: 100%;
+    background: radial-gradient(420px 220px at 15% -40px, rgba(255, 61, 154, .22), transparent 70%), linear-gradient(180deg, #2a0c22 0, var(--night) 140px) var(--night); }
+  body { height: 100%; font: 400 14px/1.43 var(--font); color: var(--pearl); overflow: hidden; }
   button, input, select, textarea { font: inherit; color: inherit; }
   button { cursor: pointer; border: 0; background: none; }
-  :focus-visible { outline: 2px solid var(--blush); outline-offset: 2px; border-radius: 8px; }
+  a { color: var(--blush); }
+  a:hover { color: var(--pearl); }
+  :focus-visible { outline: 2px solid var(--pearl); outline-offset: 1px; border-radius: 4px; }
   .muted { color: var(--muted); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  [hidden] { display: none !important; }
+  svg { flex: none; }
+
+  /* ── рамка вікна ── */
+  .app { height: 100%; display: flex; flex-direction: column; max-width: 600px; margin: 0 auto; }
+  .titlebar { height: 32px; flex: none; display: flex; align-items: center; gap: 10px; padding-left: 12px; font-size: 12px; color: var(--soft);
+    background: rgba(255, 214, 234, .06); backdrop-filter: blur(24px); border-bottom: 1px solid rgba(255, 255, 255, .05); user-select: none; }
+  .titlebar .tt { flex: 1; }
+  .titlebar .cap { width: 46px; height: 32px; display: grid; place-items: center; color: var(--pearl); }
+  .titlebar .cap:hover { background: rgba(255, 255, 255, .08); }
+  .titlebar .cap:active { background: rgba(255, 255, 255, .05); }
+  .titlebar .cap.x:hover { background: #c42b1c; color: #fff; }
+  .titlebar .cap svg { width: 10px; height: 10px; }
+  body.winapp .app { max-width: none; }
+  /* Windows 11: під смугою — системний Mica; сама сторінка нижче лишається щільною */
+  html.mica { background: transparent; }
+  html.mica .titlebar { background: rgba(28, 7, 22, .42); backdrop-filter: none; }
+  html.mica .screens { background: radial-gradient(420px 220px at 15% -40px, rgba(255, 61, 154, .2), transparent 70%), linear-gradient(180deg, #2a0c22 0, var(--night) 140px) var(--night); }
+
+  .screens { flex: 1; min-height: 0; position: relative; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+  .scroll::-webkit-scrollbar { width: 6px; }
+  .scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+  .scroll:hover::-webkit-scrollbar-thumb { background: var(--line); }
 
   /* ── шапка ── */
-  header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
-  .logo { font-family: "Unbounded", sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--blush); }
-  .logo b { color: var(--hot); font-weight: 800; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  .winbtns { display: flex; gap: 4px; margin-left: auto; }
-  .ib[aria-pressed="true"] { background: var(--hot); color: #fff; }
-  .artban { align-self: flex-start; margin-top: 4px; color: var(--muted); font-weight: 700; font-size: 12px; }
-  .artban:hover { color: var(--blush); text-decoration: underline; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 700; color: var(--muted); }
-  .chip i { width: 7px; height: 7px; border-radius: 50%; background: #6b4560; }
-  .chip.ok i { background: var(--ok); }
-  .chip.bad i { background: #ff6b8b; }
-  .chip.live { background: var(--hot); color: #fff; }
-  a.chip { text-decoration: none; color: #ffd0dc; }
-  .chip.live i { background: #fff; animation: pulse 1.6s ease-in-out infinite; }
+  .head { display: flex; align-items: center; gap: 8px; padding: 12px 16px 8px; flex: none; }
+  .logo { font-family: "Unbounded", var(--display); font-weight: 700; font-size: 17px; letter-spacing: -.02em; color: var(--blush); }
+  .logo b { color: var(--hot); font-weight: 700; }
+  .status { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; margin-left: 6px; border-radius: 999px;
+    background: var(--raised); color: var(--soft); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status i { width: 7px; height: 7px; border-radius: 50%; background: #8a5f7d; }
+  .status:hover { background: var(--line); }
+  .status.live { background: rgba(255, 61, 154, .16); color: var(--blush); }
+  .status.live i { background: var(--hot); animation: pulse 1.6s ease-in-out infinite; }
+  .status.test { background: rgba(255, 207, 112, .14); color: var(--warn); }
+  .status.test i { background: var(--warn); }
   @keyframes pulse { 50% { opacity: .35; } }
+  .grow { flex: 1; }
+  .ib { position: relative; width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--pearl); flex: none; }
+  .ib:hover { background: rgba(255, 255, 255, .08); }
+  .ib:active { background: rgba(255, 255, 255, .05); }
+  .ib[aria-pressed="true"] { color: var(--hot); }
+  .ib svg { width: 18px; height: 18px; }
+  .ib:disabled { opacity: .4; cursor: default; background: none; }
+  .dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--hot); box-shadow: 0 0 0 2px var(--night); }
 
-  .layout { display: grid; gap: 14px; }
-  @media (min-width: 880px) { .layout { grid-template-columns: 400px 1fr; align-items: start; } }
+  /* ── повідомлення під шапкою ── */
+  .banner { display: flex; align-items: center; gap: 12px; margin: 4px 16px 4px; padding: 10px 12px; border-radius: 8px; flex: none;
+    background: #3a1428; border: 1px solid #6a2a4c; }
+  .banner.warn { background: #3a2a14; border-color: #6b5222; }
+  .banner .bt { flex: 1; min-width: 0; font-size: 13px; }
+  .banner .bt b { display: block; font-weight: 600; }
+  .banner .bt span { color: var(--soft); font-size: 12px; overflow-wrap: anywhere; }
+  .banner details { font-size: 12px; color: var(--soft); margin-top: 2px; }
+  .banner summary { cursor: pointer; }
+  .banner ul { margin: 4px 0 0 16px; }
+  .banner .bb { display: flex; gap: 6px; flex: none; }
+
+  /* кнопки */
+  .btn { height: 32px; padding: 0 14px; border-radius: 6px; background: var(--raised); border: 1px solid var(--line); color: var(--pearl); font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  a.btn { text-decoration: none; }
+  .btn:hover { background: var(--line); }
+  .btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.pri:hover { background: #e52a8a; }
+  .btn.danger { color: #ffc2cf; }
+  .btn.danger:hover { background: #5c1027; }
+  .btn.pri.danger { background: #c4314b; border-color: #c4314b; color: #fff; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
+  .lnk { color: var(--blush); font-weight: 600; font-size: 12px; }
+  .lnk:hover { color: var(--pearl); text-decoration: underline; }
 
   /* ── зараз грає ── */
-  .player { background: var(--surface); border-radius: var(--r-lg); padding: 16px; position: relative; overflow: hidden; }
-  .deck { position: relative; height: 150px; margin-bottom: 14px; }
-  .sleeve { position: absolute; left: 0; top: 0; width: 150px; height: 150px; border-radius: 18px; z-index: 2;
+  .player { position: relative; margin: 4px 16px 0; padding: 16px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .06); background: var(--surface); flex: none; overflow: hidden; isolation: isolate; }
+  .tint { position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .9s ease; }
+  .tint.on { opacity: 1; }
+  .deck { position: relative; height: 150px; }
+  .sleeve { position: absolute; left: 0; top: 0; width: 150px; height: 150px; border-radius: 10px; z-index: 2;
     background: linear-gradient(135deg, var(--hot), #c58bff) center / cover no-repeat;
-    box-shadow: 0 14px 30px -14px rgba(0,0,0,.7), 0 0 0 2px rgba(255,255,255,.08); }
-  .vinyl { position: absolute; left: 92px; top: 6px; width: 138px; height: 138px; border-radius: 50%; z-index: 1; transition: left .7s cubic-bezier(.65,0,.35,1); }
+    box-shadow: 0 14px 30px -14px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .08); }
+  .vinyl { position: absolute; left: 92px; top: 6px; width: 138px; height: 138px; border-radius: 50%; z-index: 1; transition: left .7s cubic-bezier(.65, 0, .35, 1); }
   .deck.swap .vinyl { left: 8px; }
   .deck.nocover .sleeve { display: none; }
   .deck.nocover .vinyl { left: 6px; }
-  .grooves { position: absolute; inset: 0; border-radius: 50%;
-    background: repeating-radial-gradient(circle, #12030d 0 1.3px, #2d0b23 1.7px 2.8px);
+  .grooves { position: absolute; inset: 0; border-radius: 50%; background: repeating-radial-gradient(circle, #160a13 0 1.3px, #2b1226 1.7px 2.8px);
     animation: spin 2.6s linear infinite; will-change: transform; }
   .label { position: absolute; inset: 31%; border-radius: 50%; background: var(--hot) center / cover; box-shadow: 0 0 0 2px #12030d; }
   .label::after { content: ""; position: absolute; inset: 44%; border-radius: 50%; background: var(--surface); }
   .sheen { position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
-    background: conic-gradient(from 30deg, transparent 0 10%, rgba(255,255,255,.14) 14%, transparent 20% 52%, rgba(255,179,214,.18) 58%, transparent 64%); }
+    background: conic-gradient(from 30deg, transparent 0 10%, rgba(255, 255, 255, .14) 14%, transparent 20% 52%, rgba(255, 179, 214, .18) 58%, transparent 64%); }
   .player:not(.playing) .grooves { animation-play-state: paused; }
   @keyframes spin { to { transform: rotate(360deg); } }
   /* вікно згорнуте — нескінченні анімації стоять і не вантажать процесор */
-  body.calm .grooves, body.calm .chip.live i { animation-play-state: paused; }
+  body.calm .grooves, body.calm .status i { animation-play-state: paused; }
   body.calm .fill, body.calm .kpos { transition: none; }
-  .who { display: inline-block; font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: var(--hot); color: #fff; align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .who.plain { background: var(--raised); color: var(--muted); }
-  .who:empty { display: none; }
-
-  .t-title { font-family: "Unbounded", sans-serif; font-weight: 800; font-size: 20px; line-height: 1.2; letter-spacing: -.01em;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .t-artist { color: var(--blush); font-weight: 700; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .progress { display: grid; grid-template-columns: 38px 1fr 38px; gap: 8px; align-items: center; margin: 12px 0 14px; font-size: 12px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .progress span:last-child { text-align: right; }
-  .bar { position: relative; height: 6px; border-radius: 6px; background: var(--raised); transition: height .15s; }
-  /* Прогрес оновлюється раз на секунду через transform: без анімації ширини, яка змушувала
-     WebView перераховувати сторінку 60 разів на секунду. */
-  .bar .clip { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
-  .fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--hot), var(--blush)); transform: scaleX(0); transform-origin: 0 50%; transition: transform 1s linear; }
-  .kpos { position: absolute; inset: 0; pointer-events: none; transform: translateX(0); transition: transform 1s linear; }
-  .bar.jump .fill, .bar.jump .kpos, #seekBar.dragging .fill, #seekBar.dragging .kpos { transition: none; }
-  /* перемотка: ширша зона кліку, кружечок при наведенні */
-  #seekBar.can { cursor: pointer; touch-action: none; }
-  #seekBar.can::before { content: ""; position: absolute; inset: -9px 0; }
-  #seekBar.can:hover, #seekBar.dragging, #seekBar:focus-visible { height: 8px; }
-  .knob { display: none; }
-  #seekBar.can .knob { display: block; position: absolute; left: -7px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%;
-    background: var(--pearl); box-shadow: 0 2px 8px rgba(0,0,0,.4); opacity: 0; transition: opacity .15s; }
-  #seekBar.can:hover .knob, #seekBar.dragging .knob, #seekBar:focus-visible .knob { opacity: 1; }
-  #seekBar:focus-visible { outline: 2px solid var(--blush); outline-offset: 4px; }
-
-  .controls { display: flex; align-items: center; gap: 10px; }
-  .round { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--raised); transition: background .15s, transform .1s; }
-  .round:hover { background: var(--line); }
-  .round:active { transform: scale(.94); }
-  .round.big { width: 58px; height: 58px; background: var(--hot); box-shadow: 0 10px 24px -10px var(--hot); }
-  .round.big:hover { background: #ff5aab; }
-  .round svg { width: 20px; height: 20px; fill: currentColor; }
-  .round.big svg { width: 24px; height: 24px; fill: #fff; }
-  .round.heart svg { fill: none; stroke: currentColor; stroke-width: 2; }
-  .round.heart.on { color: var(--hot); background: rgba(255, 61, 154, .16); }
-  .round.heart.on svg { fill: currentColor; }
-  .round.heart.pop { animation: pop .35s ease; }
-  @keyframes pop { 40% { transform: scale(1.25); } }
-  .ib.heart svg { fill: none; stroke: currentColor; stroke-width: 2; }
+  .who { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--acc); min-height: 17px; white-space: nowrap; overflow: hidden; }
+  .who span { overflow: hidden; text-overflow: ellipsis; }
+  .who svg { width: 14px; height: 14px; }
+  .trow { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .t-title { flex: 1; min-width: 0; font-family: var(--display); font-weight: 600; font-size: 22px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-artist { color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ib.heart svg { fill: none; stroke: currentColor; stroke-width: 2; width: 20px; height: 20px; }
   .ib.heart.on { color: var(--hot); }
   .ib.heart.on svg { fill: currentColor; }
-  .vol { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .vol svg { width: 18px; height: 18px; fill: var(--muted); flex: none; }
-  input[type=range] { width: 100%; accent-color: var(--hot); }
-  .vol b { width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
+  .ib.heart.pop { animation: pop .35s ease; }
+  @keyframes pop { 40% { transform: scale(1.2); } }
 
-  .onair { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 12px 14px; border-radius: var(--r-md); background: var(--raised); }
-  .onair p { font-size: 12px; }
-  .fb { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 9px 14px; border-radius: var(--r-md); background: var(--raised); }
-  .fb label { font-weight: 700; font-size: 13px; white-space: nowrap; }
-  .fb select { min-width: 0; max-width: 60%; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); font-weight: 700; }
-  .pls { list-style: none; display: grid; gap: 4px; margin-top: 8px; }
-  .pl { display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border-radius: var(--r-sm); background: var(--surface); }
-  .pl .nm { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pl .nm small { display: inline; margin-left: 6px; }
-  .pl.on { box-shadow: inset 0 0 0 1px var(--hot); }
-  .pl .tag { font-size: 11px; font-weight: 800; color: var(--hot); }
-  .addpl { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 8px; }
-  .addpl input { min-width: 0; padding: 9px 11px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); }
-  .addpl input::placeholder { color: #8d6481; }
-  .addpl #plLink { grid-column: 1 / -1; }
-  .addpl button { padding: 0 14px; border-radius: var(--r-sm); background: var(--hot); color: #fff; font-weight: 800; }
-  .addpl button:disabled { opacity: .5; }
+  .progress { display: grid; grid-template-columns: 34px 1fr 34px; gap: 10px; align-items: center; margin-top: 12px; font-size: 12px; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .progress span:last-child { text-align: right; }
+  .bar { position: relative; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .2); }
+  /* прогрес оновлюється раз на секунду через transform — без перерахунку сторінки */
+  .bar .clip { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
+  .fill { height: 100%; width: 100%; background: var(--acc); transform: scaleX(0); transform-origin: 0 50%; transition: transform 1s linear; }
+  .kpos { position: absolute; inset: 0; pointer-events: none; transform: translateX(0); transition: transform 1s linear; }
+  .bar.jump .fill, .bar.jump .kpos, #seekBar.dragging .fill, #seekBar.dragging .kpos { transition: none; }
+  #seekBar.can { cursor: pointer; touch-action: none; }
+  #seekBar.can::before { content: ""; position: absolute; inset: -9px 0; }
+  .knob { display: none; }
+  #seekBar.can .knob { display: block; position: absolute; left: -7px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+  #seekBar:focus-visible { outline: 2px solid var(--pearl); outline-offset: 5px; }
 
-  /* перемикач */
-  .switch { position: relative; width: 46px; height: 26px; flex: none; }
-  .switch input { position: absolute; opacity: 0; inset: 0; cursor: pointer; z-index: 1; }
-  .switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background .2s; }
-  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--pearl); transition: transform .2s; }
-  .switch input:checked + span { background: var(--hot); }
-  .switch input:checked + span::after { transform: translateX(20px); }
-  .switch input:focus-visible + span { outline: 2px solid var(--blush); outline-offset: 2px; }
+  .controls { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .play { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--pearl); color: var(--night); flex: none; transition: transform .1s; }
+  .play:hover { background: #fff; }
+  .play:active { transform: scale(.95); }
+  .play svg { width: 20px; height: 20px; fill: currentColor; }
+  .skip { height: 40px; padding: 0 14px 0 10px; border-radius: 8px; background: rgba(255, 255, 255, .12); display: flex; align-items: center; gap: 6px; font-weight: 600; flex: none; }
+  .skip:hover { background: rgba(255, 255, 255, .18); }
+  .skip:disabled { opacity: .45; cursor: default; }
+  .skip svg { width: 18px; height: 18px; fill: currentColor; }
+  .vol { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 6px; }
+  .vol svg { width: 18px; height: 18px; }
+  input[type=range] { flex: 1; min-width: 0; accent-color: var(--hot); }
+  .vol b { width: 22px; font-size: 12px; font-weight: 400; color: var(--soft); font-variant-numeric: tabular-nums; }
 
-  /* ── вкладки ── */
-  .panel { background: var(--surface); border-radius: var(--r-lg); padding: 6px; }
-  .tabs { display: grid; grid-template-columns: repeat(6, auto); gap: 4px; padding: 4px; background: var(--night); border-radius: 16px; }
-  .tab { padding: 9px 4px; border-radius: 12px; font-weight: 800; color: var(--muted); transition: background .15s, color .15s; }
-  .tab[aria-selected=true] { background: var(--raised); color: var(--pearl); }
-  .tab .n { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--hot); color: #fff; font-size: 11px; }
-  .tab .n:empty { display: none; }
-  .tab .n.bad { background: #e5484d; }
-  .tab { white-space: nowrap; }
-  /* ── помилки ── */
-  .errtools { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
-  .errtools p { flex: 1; color: var(--muted); font-size: 12px; }
-  .errs { list-style: none; display: grid; gap: 6px; }
-  .err { padding: 10px 12px; border-radius: var(--r-md); background: var(--night); border-left: 3px solid var(--warn); }
-  .err.error { border-left-color: #e5484d; }
-  .err .eh { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); }
-  .err .eh b { color: var(--pearl); font-weight: 800; }
-  .err .eh .x { margin-left: auto; }
-  .err p { margin-top: 3px; font-weight: 700; overflow-wrap: anywhere; }
-  .err details { margin-top: 6px; font-size: 12px; color: var(--muted); }
-  .err summary { cursor: pointer; }
-  .err pre { margin-top: 6px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: 11px; background: var(--surface); padding: 8px; border-radius: 8px; }
-  .view { padding: 12px 8px 8px; }
-  .view[hidden] { display: none; }
+  /* меню «ще» */
+  .menu { position: fixed; z-index: 40; min-width: 240px; padding: 4px; border-radius: 8px; background: #2f1027; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0, 0, 0, .5); }
+  .menu button, .menu a { display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; padding: 0 12px; border-radius: 4px; text-align: left; text-decoration: none; color: var(--pearl); font-size: 13px; white-space: nowrap; }
+  .menu button:hover, .menu a:hover, .menu button:focus-visible, .menu a:focus-visible { background: var(--raised); outline: none; }
+  .menu .bad { color: #ffc2cf; }
+  .menu hr { border: 0; height: 1px; background: var(--line); margin: 4px 0; }
+  .menu svg { width: 16px; height: 16px; }
 
-  .list { list-style: none; display: grid; gap: 6px; }
-  .item { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 7px; border-radius: var(--r-md); background: var(--night); }
-  .item .cv { width: 44px; height: 44px; border-radius: 10px; background: var(--raised) center / cover;
-    /* якщо жодна картинка не завантажилась — видно маленьку платівку */
-    background-color: #12030d; box-shadow: inset 0 0 0 15px #2d0b23, inset 0 0 0 16px var(--hot); }
-  .item .tt { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .item .aa { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .acts { display: flex; gap: 4px; }
-  .ib { min-width: 32px; height: 32px; padding: 0 9px; border-radius: 10px; background: var(--raised); font-size: 12px; font-weight: 800; display: inline-grid; place-items: center; }
-  .ib:hover { background: var(--line); }
-  .ib.pink { background: var(--hot); color: #fff; }
-  .ib:disabled { opacity: .35; cursor: default; }
-  .ib svg { width: 15px; height: 15px; fill: currentColor; }
-  .empty { padding: 26px 12px; text-align: center; color: var(--muted); }
-  .empty b { display: block; color: var(--pearl); font-size: 15px; margin-bottom: 4px; }
-  .rowhead { display: flex; justify-content: space-between; align-items: center; margin: 0 2px 10px; }
-  .rowhead h3 { font-size: 13px; font-weight: 800; color: var(--muted); }
-  .link { color: var(--blush); font-weight: 800; font-size: 12px; }
-  .link:hover { text-decoration: underline; }
+  /* пошук */
+  .find { padding: 12px 16px 0; flex: none; }
+  .field-in { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px 0 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); border-bottom: 2px solid #8a4d78; }
+  .field-in:focus-within { border-bottom-color: var(--hot); background: #240b1d; }
+  .field-in input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; }
+  .field-in input::placeholder { color: #a17393; }
+  .field-in svg { width: 16px; height: 16px; }
+  .kbd { font-size: 11px; color: var(--muted); padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; white-space: nowrap; }
 
-  .search { display: flex; gap: 6px; margin-bottom: 10px; }
-  .search input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--night); }
-  .search input::placeholder { color: #8d6481; }
-  .search button { padding: 0 16px; border-radius: var(--r-md); background: var(--hot); color: #fff; font-weight: 800; }
+  /* вкладки черга / історія */
+  .tabs { display: flex; align-items: center; gap: 20px; padding: 12px 20px 0; flex: none; border-bottom: 1px solid var(--raised); }
+  .tab { position: relative; height: 36px; color: var(--muted); }
+  .tab:hover { color: var(--pearl); }
+  .tab[aria-selected="true"] { color: var(--pearl); font-weight: 600; }
+  .tab[aria-selected="true"]::after { content: ""; position: absolute; left: 25%; right: 25%; bottom: -1px; height: 3px; border-radius: 2px; background: var(--hot); }
+  .tab .n { color: var(--muted); font-weight: 400; }
+  .tabs .meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .results-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px 20px; flex: none; border-bottom: 1px solid var(--raised); }
+  .results-head b { flex: 1; font-weight: 600; }
+  .results-head .hint { font-size: 12px; color: var(--muted); }
+  .list-wrap { flex: 1 1 auto; min-height: 168px; overflow-y: auto; scrollbar-gutter: stable; padding: 6px 2px 8px 8px; }
+  .list { list-style: none; }
 
-  /* правила */
-  .form { display: grid; gap: 8px; }
-  .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-radius: var(--r-md); background: var(--night); }
-  .field label, .field .lbl { font-weight: 700; }
-  .field small { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
-  .num { display: flex; align-items: center; gap: 4px; }
-  .num input { width: 58px; text-align: center; padding: 6px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); font-weight: 800; }
-  .seg { display: flex; padding: 3px; gap: 2px; border-radius: 12px; background: var(--surface); }
-  .seg button { padding: 6px 10px; border-radius: 9px; font-size: 12px; font-weight: 800; color: var(--muted); }
-  .seg button[aria-pressed=true] { background: var(--hot); color: #fff; }
-  .field.col { flex-direction: column; align-items: stretch; }
-  .field textarea, .field input[type=text] { width: 100%; padding: 9px 11px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); resize: vertical; }
-  .group { font-size: 12px; font-weight: 800; color: var(--muted); margin: 10px 4px 2px; }
-  .note { color: var(--muted); font-size: 12px; margin: 2px 4px 8px; }
-  .seg.wide { display: grid; grid-template-columns: repeat(5, 1fr); }
-  .seg.wide button { padding: 7px 2px; }
-  .field.off { opacity: .45; }
-  .cmds { list-style: none; display: grid; gap: 6px; }
-  .cmd { padding: 11px 12px; border-radius: var(--r-md); background: var(--night); display: grid; gap: 8px; }
-  .cmd-head b { font-weight: 800; }
+  /* рядок треку */
+  .row { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; min-height: 56px; padding: 6px 8px; border-radius: 8px; }
+  .row:hover, .row:focus-within { background: var(--raised); }
+  .row .cv { width: 40px; height: 40px; border-radius: 6px; background: var(--raised) center / cover;
+    /* жодна картинка не завантажилась — видно маленьку платівку */
+    background-color: #12030d; box-shadow: inset 0 0 0 13px #2d0b23, inset 0 0 0 14px var(--hot); }
+  .row .tx { min-width: 0; }
+  .row .tt { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .aa { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .rt { display: flex; align-items: center; gap: 4px; }
+  .row .eta, .row .note2 { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row .hov { display: none; }
+  .row:hover .hov, .row:focus-within .hov { display: inline-flex; }
+  .row:hover .eta, .row:focus-within .eta { display: none; }
+  .sq { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; background: var(--surface); color: var(--pearl); flex: none; }
+  .sq:hover { background: var(--line); }
+  .sq svg { width: 13px; height: 13px; fill: currentColor; }
+  .sq[data-banartist] svg { width: 16px; height: 16px; }
+  .sq.heart svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .sq.heart.on { color: var(--hot); }
+  .sq.heart.on svg { fill: currentColor; }
+  .row .btn.sm { background: var(--surface); }
+  .row .btn.sm.pri { background: var(--accent); }
+  .tail { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; min-height: 56px; padding: 6px 8px; color: var(--muted); font-size: 13px; }
+  .tail .ph { width: 40px; height: 40px; border-radius: 6px; border: 1px dashed #6f4363; display: grid; place-items: center; }
+  .tail .ph svg { width: 16px; height: 16px; }
+  .tail select { max-width: 100%; border: 0; background: transparent; color: var(--blush); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .tail select option { background: var(--surface); color: var(--pearl); }
+  .empty { padding: 26px 12px; text-align: center; color: var(--muted); list-style: none; }
+  .empty b { display: block; color: var(--pearl); font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+
+  /* ── налаштування: ті самі вузькі «телефонні» екрани ── */
+  .bar2 { display: flex; align-items: center; gap: 4px; padding: 8px 12px 8px 8px; flex: none; }
+  .bar2 h1 { font-family: var(--display); font-size: 20px; font-weight: 600; }
+  .bar2 svg { width: 16px; height: 16px; }
+  .pad { padding: 0 16px 16px; }
+  .lead { color: var(--muted); font-size: 13px; padding: 0 4px 8px; }
+  .gtitle { padding: 16px 4px 6px; font-size: 13px; font-weight: 600; }
+  .gtitle:first-child { padding-top: 6px; }
+  .card { display: flex; flex-direction: column; gap: 2px; border-radius: 8px; overflow: hidden; }
+  .set { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; min-height: 60px; padding: 8px 14px; background: var(--surface); }
+  .set.ico { grid-template-columns: 20px 1fr auto; gap: 14px; }
+  button.set { width: 100%; text-align: left; }
+  button.set:hover, .set.click:hover { background: #331229; }
+  .set > span:not(.switch) { min-width: 0; }
+  .set .lb { display: block; }
+  .set small { display: block; font-size: 12px; color: var(--muted); }
+  .set svg { width: 20px; height: 20px; }
+  .set .chev { width: 12px; height: 12px; color: var(--muted); }
+  .set.col { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px 14px; }
+  .set.off { opacity: .45; }
+  .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #c4314b; color: #fff; font-size: 12px; font-weight: 600; display: grid; place-items: center; }
+  .state-ok { font-size: 12px; color: var(--ok); white-space: nowrap; }
+  .state-bad { font-size: 12px; color: var(--bad); white-space: nowrap; }
+  .state-off { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .foot { display: flex; flex-direction: column; gap: 8px; padding: 18px 0 4px; }
+  .foot .row2 { display: flex; gap: 8px; }
+  .foot .row2 .btn { flex: 1; height: 36px; }
+  .foot p { text-align: center; color: var(--muted); font-size: 12px; }
+
+  /* поля */
+  .tin, .set textarea, .set select { width: 100%; min-width: 0; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); border-bottom: 2px solid #8a4d78; background: var(--night); outline: 0; }
+  .tin:focus, .set textarea:focus { border-bottom-color: var(--hot); }
+  .set textarea { resize: vertical; font-size: 13px; }
+  .tin::placeholder, .set textarea::placeholder { color: #8d6481; }
+  .inline { display: flex; gap: 6px; }
+  .inline .tin { flex: 1; }
+  .num input { width: 64px; text-align: center; padding: 6px; border-radius: 6px; border: 1px solid var(--line); border-bottom: 2px solid #8a4d78; background: var(--night); font-variant-numeric: tabular-nums; }
+  .num input:disabled { opacity: .6; }
+
+  /* перемикач у стилі Windows 11 */
+  .switch { position: relative; width: 40px; height: 20px; flex: none; }
+  .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+  .switch span { position: absolute; inset: 0; border-radius: 999px; border: 1px solid var(--muted); transition: background .15s, border-color .15s; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+  .switch input:hover + span::after { transform: scale(1.15); }
+  .switch input:checked + span { background: var(--accent); border-color: var(--accent); }
+  .switch input:checked + span::after { background: #fff; transform: translateX(20px); }
+  .switch input:checked:hover + span::after { transform: translateX(20px) scale(1.15); }
+  .switch input:focus-visible + span { outline: 2px solid var(--pearl); outline-offset: 2px; }
+  .switch input:disabled + span { opacity: .5; }
+
+  /* сегменти (ролі в лімітах) */
+  .seg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; padding: 3px; border-radius: 8px; background: var(--surface); }
+  .seg button { height: 30px; border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  /* команди */
+  .cmds { list-style: none; display: flex; flex-direction: column; gap: 2px; border-radius: 8px; overflow: hidden; }
+  .cmd { padding: 12px 14px; background: var(--surface); display: grid; gap: 8px; }
+  .cmd-head b { font-weight: 600; }
   .cmd-head small { display: block; color: var(--muted); font-size: 12px; }
   .names { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-  .name { display: inline-flex; align-items: center; border-radius: 999px; background: var(--raised); font-weight: 800; font-size: 13px; }
-  .name.main { background: var(--hot); color: #fff; }
-  .name .nm { padding: 3px 4px 3px 10px; border-radius: 999px 0 0 999px; }
+  .name { display: inline-flex; align-items: center; height: 28px; border-radius: 999px; background: var(--raised); font-weight: 600; font-size: 13px; }
+  .name.main { background: var(--accent); color: #fff; }
+  .name .nm { height: 100%; padding: 0 4px 0 11px; border-radius: 999px 0 0 999px; }
   .name .nm:hover { text-decoration: underline; text-underline-offset: 3px; }
-  .name .x { width: 22px; height: 22px; margin-right: 2px; border-radius: 50%; display: grid; place-items: center; opacity: .7; }
-  .name .x:hover { opacity: 1; background: rgba(0,0,0,.18); }
-  .name .x svg { width: 11px; height: 11px; fill: currentColor; }
-  .name-in { width: 120px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hot); background: var(--surface); font-weight: 800; font-size: 13px; }
-  .addname { padding: 3px 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--muted); font-weight: 800; font-size: 12px; }
+  .name .x { width: 22px; height: 22px; margin-right: 3px; border-radius: 50%; display: grid; place-items: center; opacity: .7; }
+  .name .x:hover { opacity: 1; background: rgba(0, 0, 0, .2); }
+  .name .x svg { width: 10px; height: 10px; fill: currentColor; }
+  .name-in { width: 120px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--hot); background: var(--night); font-weight: 600; font-size: 13px; }
+  .addname { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px dashed var(--line); color: var(--muted); font-weight: 600; font-size: 12px; }
   .addname:hover { color: var(--pearl); border-color: var(--muted); }
   .roles { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .roles .lbl { font-size: 12px; color: var(--muted); margin-right: 2px; }
-  .role { padding: 4px 8px; border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 800; }
-  .role[aria-pressed=true] { background: rgba(255, 61, 154, .2); color: var(--blush); box-shadow: inset 0 0 0 1px rgba(255, 61, 154, .55); }
-  .role.implied { background: rgba(255, 61, 154, .13); color: #e7a3c6; box-shadow: inset 0 0 0 1px rgba(255, 61, 154, .2); cursor: default; }
+  .role { height: 26px; padding: 0 9px; border-radius: 6px; background: var(--night); color: var(--muted); font-size: 12px; font-weight: 600; }
+  .role[aria-pressed="true"] { background: rgba(214, 25, 122, .28); color: var(--blush); box-shadow: inset 0 0 0 1px rgba(255, 61, 154, .6); }
+  .role.implied { background: rgba(214, 25, 122, .14); color: #e7a3c6; box-shadow: inset 0 0 0 1px rgba(255, 61, 154, .22); cursor: default; }
   .roles .only { font-size: 12px; color: var(--warn); }
-  .addnick { display: flex; gap: 6px; margin-top: 8px; }
-  .addnick input { flex: 1; min-width: 0; padding: 9px 11px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); }
-  .addnick input::placeholder { color: #8d6481; }
-  .addnick button { padding: 0 14px; border-radius: var(--r-sm); background: var(--hot); color: #fff; font-weight: 800; }
-  .nicks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .helpcmds { display: flex; flex-wrap: wrap; gap: 6px; }
+  .helpcmds label { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 8px; border-radius: 999px; background: var(--raised); font-size: 13px; cursor: pointer; }
+  .helpcmds input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .helpprev { padding: 8px 10px; border-radius: 6px; background: var(--night); font-size: 13px; line-height: 1.5; word-break: break-word; }
+  .helpprev b { color: #b78cff; font-weight: 600; }
+  .nicks { display: flex; flex-wrap: wrap; gap: 6px; }
   .nicks:empty { display: none; }
-  .nick { display: inline-flex; align-items: center; gap: 2px; padding: 4px 4px 4px 11px; border-radius: 999px; background: var(--raised); font-weight: 800; font-size: 13px; }
+  .nick { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 3px 0 11px; border-radius: 999px; background: var(--raised); font-weight: 600; font-size: 13px; }
   .nick button { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
   .nick button:hover { background: var(--line); color: var(--pearl); }
-  .nick button svg { width: 12px; height: 12px; fill: currentColor; }
+  .nick button svg { width: 10px; height: 10px; fill: currentColor; }
+  .pls { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .pl { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 4px 4px 12px; border-radius: 6px; background: var(--night); }
+  .pl .nm { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl .nm small { display: inline; margin-left: 6px; font-weight: 400; color: var(--muted); }
+  .pl.on { box-shadow: inset 0 0 0 1px var(--hot); }
+  .pl .tag { font-size: 12px; font-weight: 600; color: var(--hot); padding: 0 8px; }
+  .addpl { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+  .addpl #plLink { grid-column: 1 / -1; }
 
-  footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; font-size: 12px; }
-  .foot-r { flex-wrap: wrap; }
-  #updBtn.has { color: #fff; background: var(--hot); }
-  /* ── оновлення ── */
-  .updbar { display: flex; gap: 12px; align-items: center; margin: 0 0 12px; padding: 12px 14px; border-radius: var(--r-md);
-    background: linear-gradient(135deg, rgba(255,61,154,.22), rgba(197,139,255,.16)); box-shadow: inset 0 0 0 1px rgba(255,61,154,.45); }
-  .updbar[hidden] { display: none; }
-  .updbar .ut { flex: 1; min-width: 0; display: grid; gap: 2px; }
-  .updbar .ut span { font-size: 13px; color: var(--blush); overflow-wrap: anywhere; }
-  .updbar details { font-size: 12px; color: var(--muted); }
-  .updbar summary { cursor: pointer; }
-  .updbar ul { margin: 4px 0 0 16px; display: grid; gap: 2px; }
-  .updbar .ub { display: grid; gap: 6px; }
-  .updbar .pri { padding: 9px 14px; border-radius: 12px; background: var(--hot); color: #fff; font-weight: 800; }
-  .updbar .pri:disabled { opacity: .6; }
-  .ghost { padding: 8px 12px; border-radius: 12px; background: var(--surface); font-weight: 800; color: var(--muted); }
-  .ghost:hover { color: var(--pearl); }
-  .ghost.danger:hover { background: #5c1027; color: #ffd0dc; }
-  .foot-r { display: flex; gap: 6px; }
-  .round:disabled { opacity: .45; cursor: default; }
+  /* помилки */
+  .errtools { display: flex; align-items: center; gap: 6px; padding: 0 0 10px; }
+  .errtools p { flex: 1; color: var(--muted); font-size: 12px; }
+  .errs { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .err { padding: 10px 12px; border-radius: 8px; background: var(--surface); border-left: 3px solid var(--warn); }
+  .err.error { border-left-color: #e5484d; }
+  .err .eh { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); }
+  .err .eh b { color: var(--pearl); font-weight: 600; }
+  .err .eh .x { margin-left: auto; }
+  .err p { margin-top: 3px; font-weight: 600; overflow-wrap: anywhere; }
+  .err details { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .err summary { cursor: pointer; }
+  .err pre { margin-top: 6px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: 11px; background: var(--night); padding: 8px; border-radius: 6px; }
 
-  .helpcmds { display: flex; flex-wrap: wrap; gap: 6px; }
-  .helpcmds label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: var(--raised); font-size: 12.5px; font-weight: 700; cursor: pointer; }
-  .helpcmds input { accent-color: var(--hot); }
-  .helpprev { padding: 10px 12px; border-radius: var(--r-sm); background: var(--night); font-size: 13px; line-height: 1.5; word-break: break-word; }
-  .ask { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(10, 2, 8, .62); }
-  .ask[hidden] { display: none; }
-  .ask .box { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 18px; box-shadow: 0 18px 50px rgba(0, 0, 0, .5); }
-  .ask h2 { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
-  .ask p { color: var(--muted); white-space: pre-line; font-size: 13.5px; }
-  .ask .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-  .ask .btns .pri.danger { background: #e5476b; }
-  .toast { position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 20px); opacity: 0; padding: 10px 16px; border-radius: 999px;
-    background: var(--pearl); color: var(--night); font-weight: 800; transition: .25s; pointer-events: none; z-index: 10; }
+  /* перегляд віджета */
+  .wprev { position: relative; height: 0; padding-bottom: 30.77%; border-radius: 8px; overflow: hidden;
+    background: repeating-conic-gradient(#241020 0 25%, #1c0a18 0 50%) 0 0 / 16px 16px; }
+  .wprev iframe { color-scheme: normal; position: absolute; left: 0; top: 0; width: 520px; height: 160px; border: 0; transform-origin: 0 0; pointer-events: none; }
+
+  /* вікно підтвердження в стилі діалогів Windows: головна дія ліворуч */
+  .ask { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(10, 2, 8, .6); }
+  .ask .box { width: min(400px, 100%); background: #2f1027; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, .55); }
+  .ask .body { padding: 20px 24px 22px; }
+  .ask h2 { font-family: var(--display); font-size: 18px; font-weight: 600; margin-bottom: 10px; }
+  .ask p { color: var(--soft); white-space: pre-line; font-size: 13.5px; }
+  .ask .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 20px 24px; background: #240b1d; border-top: 1px solid var(--line); }
+  .ask .btns .btn { height: 32px; }
+
+  .toast { position: fixed; left: 50%; bottom: 16px; z-index: 50; transform: translate(-50%, 16px); opacity: 0; max-width: calc(100% - 32px);
+    padding: 10px 16px; border-radius: 8px; background: #3b1531; border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, .45); font-size: 13px;
+    transition: .2s; pointer-events: none; text-align: center; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-  .offline { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; text-align: center; padding: 30px; background: rgba(28, 7, 22, .94); }
+  .offline { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; text-align: center; padding: 30px; background: rgba(28, 7, 22, .95); }
+  body.winapp .offline { top: 32px; }
   .offline.show { display: grid; }
-  .offline h2 { font-family: "Unbounded", sans-serif; font-size: 18px; color: var(--blush); margin-bottom: 8px; }
+  .offline h2 { font-family: var(--display); font-size: 20px; font-weight: 600; color: var(--blush); margin-bottom: 8px; }
 
-  @media (max-width: 430px) {
+  @media (max-width: 400px) {
     .deck { height: 120px; } .sleeve { width: 120px; height: 120px; } .vinyl { left: 70px; width: 110px; height: 110px; }
+    .vol b { display: none; }
   }
   @media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">pipa<b>bobik</b></div>
-  <div class="winbtns" id="winBtns" hidden>
-    <button class="ib" id="pinBtn" aria-pressed="false" aria-label="Поверх усіх вікон" title="Поверх усіх вікон"><svg viewBox="0 0 24 24"><path d="M15 3l6 6-2.5.8-3.8 3.8.8 4.9-1.6 1.6-3.8-3.8L5 21.4 3.6 20l5.3-5.1-3.8-3.8 1.6-1.6 4.9.8 3.8-3.8z"/></svg></button>
-    <button class="ib" id="miniBtn" aria-label="Міні-плеєр у кутку екрана" title="Міні-плеєр у кутку екрана"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zm2 2v10h14V7zm6 4h7v5h-7z"/></svg></button>
+<div class="app">
+  <!-- власна смуга вікна: лише в застосунку (у браузері її немає) -->
+  <div class="titlebar" id="titlebar" hidden>
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#ff3d9a"/><circle cx="8" cy="8" r="2" fill="#1c0716"/></svg>
+    <span class="tt">pipabobik</span>
+    <button class="cap" id="capMin" aria-label="Згорнути" title="Згорнути"><svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg></button>
+    <button class="cap" id="capMax" aria-label="Розгорнути" title="Розгорнути"><svg viewBox="0 0 10 10" id="capMaxIcon"><rect x=".5" y=".5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor"/></svg></button>
+    <button class="cap x" id="capClose" aria-label="Закрити" title="Закрити"><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
   </div>
-  <div class="chips" id="chips"></div>
-</header>
 
-<div class="updbar" id="updBar" hidden>
-  <div class="ut">
-    <b>Нова версія pipabobik</b>
-    <span id="updMsg"></span>
-    <details id="updNotesWrap"><summary>Що нового</summary><ul id="updNotes"></ul></details>
-  </div>
-  <div class="ub">
-    <button class="pri" id="updGo">Оновити</button>
-    <button class="ghost" id="updLater">Пізніше</button>
-  </div>
-</div>
+  <div class="screens">
+  <!-- ═══ ефір ═══ -->
+  <main class="screen" id="scr-main">
+   <div class="scroll" style="display:flex;flex-direction:column;scrollbar-gutter:auto">
+    <div class="head">
+      <div class="logo">pipa<b>bobik</b></div>
+      <button class="status" id="status" title=""><i></i><span id="statusText">…</span></button>
+      <div class="grow"></div>
+      <span id="winBtns" hidden style="display:contents">
+        <button class="ib" id="pinBtn" aria-pressed="false" aria-label="Поверх усіх вікон" title="Поверх усіх вікон">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5M9 10l5 5"/></svg></button>
+        <button class="ib" id="miniBtn" aria-label="Міні-плеєр" title="Міні-плеєр у кутку екрана">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/></svg></button>
+      </span>
+      <button class="ib" id="setBtn" aria-label="Налаштування" title="Налаштування (Ctrl+,)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+        <i class="dot" id="setDot" hidden></i></button>
+    </div>
 
-<div class="layout">
-  <section class="player" id="player" aria-label="Зараз грає">
-    <div class="deck" id="deck">
-      <div class="vinyl"><div class="grooves"><div class="label" id="label"></div></div><div class="sheen"></div></div>
-      <div class="sleeve" id="sleeve"></div>
+    <div class="banner" id="updBar" hidden>
+      <div class="bt">
+        <b>Нова версія pipabobik</b>
+        <span id="updMsg"></span>
+        <details id="updNotesWrap"><summary>Що нового</summary><ul id="updNotes"></ul></details>
+      </div>
+      <div class="bb"><button class="btn pri sm" id="updGo">Оновити</button><button class="btn sm" id="updLater">Пізніше</button></div>
     </div>
-    <div class="who" id="who"></div>
-    <div class="t-title" id="title" style="margin-top:8px">Нічого не грає</div>
-    <div class="t-artist" id="artist">Замовлення з чату з'являться тут</div>
-    <button class="artban" id="banArtistNow" hidden>Заборонити виконавця</button>
-    <div class="progress"><span id="cur">0:00</span><div class="bar" id="seekBar" role="slider" tabindex="0" aria-label="Перемотати" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div class="clip"><div class="fill" id="fill"></div></div><div class="kpos" id="kpos"><i class="knob"></i></div></div><span id="dur">0:00</span></div>
-    <div class="controls">
-      <button class="round big" id="playBtn" aria-label="Пауза"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
-      <button class="round" data-act="skip" aria-label="Пропустити трек" title="Пропустити"><svg viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg></button>
-      <button class="round heart" id="likeBtn" aria-pressed="false" aria-label="Лайкнути в YouTube Music" title="Лайкнути в YouTube Music"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.9 1.3-1.8 2.9-2.9 4.9-2.9 3.5 0 5.6 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
-      <button class="round" data-act="ban" aria-label="Заборонити трек" title="Заборонити цей трек і пропустити"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 3a7 7 0 015.7 11.1L7.9 6.3A7 7 0 0112 5zm0 14a7 7 0 01-5.7-11.1l9.8 9.8A7 7 0 0112 19z"/></svg></button>
-      <label class="vol" title="Гучність"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 8.5a5 5 0 010 7l-1.4-1.4a3 3 0 000-4.2z"/></svg>
-        <input type="range" min="0" max="100" id="vol" aria-label="Гучність"><b id="volv"></b></label>
+    <div class="banner warn" id="alert" hidden>
+      <div class="bt"><b id="alertTitle"></b><span id="alertText"></span></div>
+      <div class="bb" id="alertAct"></div>
     </div>
-    <div class="onair">
-      <div><b>Музика</b><p class="muted" id="onairHint">Вмикається сама з початком трансляції</p></div>
-      <label class="switch"><input type="checkbox" id="onair" aria-label="Увімкнути музику"><span></span></label>
+
+    <section class="player" id="player" aria-label="Зараз грає">
+      <div class="tint" id="tintA"></div><div class="tint" id="tintB"></div>
+      <div class="deck" id="deck">
+        <div class="vinyl"><div class="grooves"><div class="label" id="label"></div></div><div class="sheen"></div></div>
+        <div class="sleeve" id="sleeve"></div>
+      </div>
+      <div class="who" id="whoRow" style="visibility:hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 14v-2a8 8 0 0116 0v2M4 14h3v6H5a1 1 0 01-1-1zM20 14h-3v6h2a1 1 0 001-1z"/></svg><span id="who"></span></div>
+      <div class="trow">
+        <div class="t-title" id="title">Нічого не грає</div>
+        <button class="ib heart" id="likeBtn" aria-pressed="false" aria-label="Лайкнути в YouTube Music" title="Лайк у YouTube Music (L)"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.9 1.3-1.8 2.9-2.9 4.9-2.9 3.5 0 5.6 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
+      </div>
+      <div class="t-artist" id="artist">Замовлення з чату з'являться тут</div>
+      <div class="progress"><span id="cur">0:00</span><div class="bar" id="seekBar" role="slider" tabindex="0" aria-label="Перемотати" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div class="clip"><div class="fill" id="fill"></div></div><div class="kpos" id="kpos"><i class="knob"></i></div></div><span id="dur">0:00</span></div>
+      <div class="controls">
+        <button class="play" id="playBtn" aria-label="Пауза" title="Пауза (пробіл)"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+        <button class="skip" data-act="skip" title="Пропустити трек"><svg viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg>Далі</button>
+        <label class="vol" title="Гучність"><svg viewBox="0 0 24 24" fill="none" stroke="#e3c9d8" stroke-width="1.6" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 010 7"/></svg>
+          <span class="sr">Гучність</span><input type="range" min="0" max="100" id="vol"><b id="volv"></b></label>
+        <button class="ib" id="moreBtn" aria-label="Ще дії з треком" aria-haspopup="menu" title="Ще: заборонити трек чи виконавця, відкрити в YouTube Music">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      </div>
+    </section>
+
+    <form class="find" id="searchForm" role="search">
+      <label class="field-in">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#c592b2" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <span class="sr">Додати трек</span>
+        <input id="q" type="search" placeholder="Додати трек — назва або посилання YouTube" autocomplete="off" spellcheck="false">
+        <span class="kbd" aria-hidden="true">Ctrl+K</span>
+      </label>
+    </form>
+
+    <div class="tabs" role="tablist" aria-label="Список" id="tabs">
+      <button class="tab" role="tab" aria-selected="true" data-tab="queue">Черга <span class="n" id="qn"></span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="history">Історія</button>
+      <div class="grow"></div>
+      <span class="meta" id="qEnd"></span>
+      <button class="lnk" id="clearBtn" hidden>Очистити</button>
     </div>
-    <div class="fb">
-      <label for="fbSelect">Коли черга порожня</label>
-      <select id="fbSelect" aria-label="Фоновий плейлист"></select>
+    <div class="results-head" id="resHead" hidden>
+      <b>Знайдено в YouTube Music</b>
+      <span class="hint">Esc — закрити</span>
+      <button class="ib" id="resClose" aria-label="Закрити пошук"><svg viewBox="0 0 12 12" style="width:12px;height:12px"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.5"/></svg></button>
     </div>
+
+    <div class="list-wrap scroll">
+      <div id="v-queue">
+        <ol class="list" id="queue"></ol>
+        <div class="tail">
+          <div class="ph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#c592b2" stroke-width="1.6"><path d="M9 18V6l10-2v12M9 18a3 3 0 11-3-3 3 3 0 013 3zM19 16a3 3 0 11-3-3 3 3 0 013 3z"/></svg></div>
+          <div><label for="fbSelect" id="fbLabel">Потім — фоновий плейлист</label> <select id="fbSelect" aria-label="Фоновий плейлист, коли черга порожня"></select></div>
+        </div>
+      </div>
+      <div id="v-history" hidden><ul class="list" id="history"></ul></div>
+      <div id="v-add" hidden><ul class="list" id="results"></ul>
+        <p class="lead" style="padding:10px 8px">Можна вставити посилання на трек YouTube або YouTube Music. Плейлисти — у Налаштуваннях → Фонові плейлисти.</p></div>
+    </div>
+   </div>
+  </main>
+
+  <!-- ═══ налаштування ═══ -->
+  <section class="screen" id="scr-settings" hidden>
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до ефіру" title="Назад (Esc)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Налаштування</h1></div>
+    <div class="pad" style="flex:none;padding-bottom:4px">
+      <label class="field-in"><svg viewBox="0 0 24 24" fill="none" stroke="#c592b2" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <span class="sr">Знайти параметр</span><input id="setFind" type="search" placeholder="Знайти параметр" autocomplete="off"></label>
+    </div>
+    <div class="scroll"><div class="pad" id="setList">
+      <div class="gtitle">Глядачі</div>
+      <div class="card">
+        <button class="set ico" data-go="pg-commands" data-k="команди доступ ролі назви музика підказка">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16M4 12h10M4 18h7M17 15l3 3-3 3"/></svg>
+          <span><span class="lb">Команди й доступ</span><small>хто може замовляти, скіпати, банити · «!музика»</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+        <button class="set ico" data-go="pg-limits" data-k="ліміти черга розмір тривалість пауза">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3a9 9 0 109 9M12 7v5l3 2"/></svg>
+          <span><span class="lb">Ліміти замовлень</span><small id="hintLimits">тривалість, кількість, пауза, розмір черги</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+        <button class="set ico" data-go="pg-helpers" data-k="помічники нік">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20c.7-3.6 3.3-5.5 6.5-5.5s5.8 1.9 6.5 5.5M16 8h5M18.5 5.5v5"/></svg>
+          <span><span class="lb">Помічники</span><small id="hintHelpers">люди без модерки з окремими правами</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+      </div>
+      <div class="gtitle">Музика</div>
+      <div class="card">
+        <button class="set ico" data-go="pg-playlists" data-k="фонові плейлисти перемішувати гучність вирівнювати звук">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h12M3 11h12M3 16h7M16 14v6M16 14l5-1.5"/></svg>
+          <span><span class="lb">Фонові плейлисти</span><small id="hintPls">грають, коли черга порожня</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+        <button class="set ico" data-go="pg-filters" data-k="фільтри бан заборонені російська explicit слова виконавці розбанити">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM6 6l12 12"/></svg>
+          <span><span class="lb">Фільтри й бан-лист</span><small id="hintBans">що не грати: російське, кліпи, заборонені треки</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+        <button class="set ico" data-go="pg-chat" data-k="чат повідомлення вітання трек">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v11H9l-5 4z"/></svg>
+          <span><span class="lb">Повідомлення в чат</span><small>про кожен трек, вітання на початку стріму</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+      </div>
+      <div class="gtitle">Система</div>
+      <div class="card">
+        <button class="set ico" data-go="pg-accounts" data-k="акаунти twitch google вхід mpv">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4.5 20c.8-3.6 3.8-5.5 7.5-5.5s6.7 1.9 7.5 5.5"/></svg>
+          <span><span class="lb">Акаунти: Twitch і Google</span><small id="hintAcc">вхід бота, YouTube Music, програвач</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+        <button class="set ico" data-go="pg-obs" data-k="obs віджет рожевий адреса звук">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5h18v12H3zM8 21h8M12 17v4"/></svg>
+          <span><span class="lb">OBS і віджет</span><small>адреса віджета, рожевий віджет, звук</small></span>
+          <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
+        <button class="set ico" data-go="pg-update" data-k="оновлення версія github">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg>
+          <span><span class="lb">Оновлення</span><small id="hintUpd">нові версії з GitHub</small></span>
+          <span class="badge" id="updBadge" hidden>1</span></button>
+        <button class="set ico" data-go="pg-errors" data-k="помилки збої">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l9.5 17h-19zM12 10v4M12 17v.5"/></svg>
+          <span><span class="lb">Помилки</span><small id="hintErr">збої бота, щоб надіслати розробнику</small></span>
+          <span class="badge" id="en" hidden></span></button>
+      </div>
+      <p class="lead" id="setNone" hidden style="padding:16px 4px">Нічого не знайдено.</p>
+      <div class="foot">
+        <div class="row2"><button class="btn" id="restartBtn" title="Музика замовкне на кілька секунд, черга збережеться">Перезапустити бота</button><button class="btn danger" id="quitBtn">Вимкнути pipabobik</button></div>
+        <p id="verLine">pipabobik</p>
+      </div>
+    </div></div>
   </section>
 
-  <section class="panel">
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-tab="queue">Черга<span class="n" id="qn"></span></button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="add">Додати</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="cmds">Команди</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="rules">Правила</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="history">Історія</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="errors">Помилки<span class="n bad" id="en"></span></button>
-    </div>
-
-    <div class="view" id="v-queue">
-      <div class="rowhead"><h3 id="qhead">Далі в черзі</h3><button class="link" id="clearBtn">Очистити</button></div>
-      <ol class="list" id="queue"></ol>
-    </div>
-
-    <div class="view" id="v-add" hidden>
-      <form class="search" id="searchForm">
-        <input id="q" type="search" placeholder="Виконавець і назва або посилання YouTube" autocomplete="off" aria-label="Пошук треку">
-        <button type="submit">Знайти</button>
-      </form>
-      <ul class="list" id="results"><li class="empty"><b>Додайте трек без команд</b>Знайдіть пісню і поставте в чергу, наступною або одразу.</li></ul>
-    </div>
-
-    <div class="view" id="v-cmds" hidden>
-      <p class="note">Ви як стрімер можете все. Ролі додаються: саб, який ще й VIP, має права обох.</p>
-
-      <div class="group">Команди чату</div>
+  <!-- ── команди й доступ ── -->
+  <section class="screen" id="pg-commands" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Команди й доступ</h1></div>
+    <div class="scroll"><div class="pad">
+      <p class="lead">Хто може писати команди в чаті. Діє одразу. Ви як стрімер можете все; ролі додаються — саб, який ще й VIP, має права обох.</p>
       <ul class="cmds" id="cmds"><li class="empty">Завантажую…</li></ul>
-
-      <div class="group">Підказка «!музика»</div>
-      <div class="form">
-        <div class="field col"><label for="helpText">Текст відповіді<small><b>{команди}</b> — сюди бот вставить команди, доступні тому, хто спитав</small></label>
-          <textarea id="helpText" rows="2" maxlength="450"></textarea></div>
-        <div class="field col"><span class="lbl">Показувати в списку<small>приховані команди працюють як і раніше, просто не потрапляють у підказку</small></span>
+      <div class="gtitle">Підказка «!музика»</div>
+      <div class="card">
+        <label class="set col"><span><span class="lb">Текст відповіді</span><small><b style="color:var(--blush)">{команди}</b> — сюди бот вставить команди, доступні тому, хто спитав</small></span>
+          <textarea id="helpText" rows="2" maxlength="450"></textarea></label>
+        <div class="set col"><span><span class="lb">Показувати в списку для глядачів</span><small>приховані команди працюють як і раніше, просто не потрапляють у підказку</small></span>
           <div class="helpcmds" id="helpCmds"></div></div>
-        <div class="field col"><span class="lbl">Так побачить звичайний глядач</span>
-          <div class="helpprev" id="helpPreview"></div></div>
+        <div class="set col"><span class="lb">Так побачить звичайний глядач</span>
+          <div class="helpprev"><b>pipabobik:</b> <span id="helpPreview"></span></div></div>
       </div>
+    </div></div>
+  </section>
 
-      <div class="group">Ліміти замовлень</div>
-      <div class="form">
-        <div class="seg wide" id="limRole" role="radiogroup" aria-label="Роль"></div>
-        <div class="field" id="limCustomRow"><label for="limCustom">Свої ліміти<small id="limCustomHint">Вимкнено — діють ліміти для всіх глядачів</small></label>
-          <label class="switch"><input type="checkbox" id="limCustom"><span></span></label></div>
-        <div class="field lim"><label for="lim_max_duration">Найдовший трек<small>хвилин, 0 — без обмежень</small></label>
-          <div class="num"><input type="number" id="lim_max_duration" min="0" max="600" data-lim="max_duration" data-scale="60"></div></div>
-        <div class="field lim"><label for="lim_max_per_user">Треків від однієї людини<small>одночасно в черзі, 0 — без обмежень</small></label>
-          <div class="num"><input type="number" id="lim_max_per_user" min="0" max="50" data-lim="max_per_user"></div></div>
-        <div class="field lim"><label for="lim_cooldown">Пауза між замовленнями<small>секунд</small></label>
-          <div class="num"><input type="number" id="lim_cooldown" min="0" max="3600" data-lim="cooldown"></div></div>
-        <div class="field lim" id="limBypassRow"><label for="lim_bypass_queue">Можна в переповнену чергу</label>
-          <label class="switch"><input type="checkbox" id="lim_bypass_queue" data-lim="bypass_queue"><span></span></label></div>
-        <div class="field"><label for="max_queue">Розмір черги<small>для всіх разом</small></label>
-          <div class="num"><input type="number" id="max_queue" min="1" max="200"></div></div>
+  <!-- ── ліміти ── -->
+  <section class="screen" id="pg-limits" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Ліміти замовлень</h1></div>
+    <div class="scroll"><div class="pad">
+      <p class="lead">Оберіть роль: у кожної можуть бути свої ліміти.</p>
+      <div class="seg" id="limRole" role="radiogroup" aria-label="Роль"></div>
+      <div class="card" style="margin-top:10px">
+        <div class="set" id="limCustomRow"><label for="limCustom"><span class="lb">Свої ліміти</span><small id="limCustomHint">Вимкнено — діють ліміти для всіх глядачів</small></label>
+          <span class="switch"><input type="checkbox" id="limCustom"><span></span></span></div>
+        <div class="set"><label for="lim_max_duration"><span class="lb">Найдовший трек</span><small>хвилин, 0 — без обмежень</small></label>
+          <span class="num"><input type="number" id="lim_max_duration" min="0" max="600" data-lim="max_duration" data-scale="60"></span></div>
+        <div class="set"><label for="lim_max_per_user"><span class="lb">Треків від однієї людини</span><small>одночасно в черзі, 0 — без обмежень</small></label>
+          <span class="num"><input type="number" id="lim_max_per_user" min="0" max="50" data-lim="max_per_user"></span></div>
+        <div class="set"><label for="lim_cooldown"><span class="lb">Пауза між замовленнями</span><small>секунд</small></label>
+          <span class="num"><input type="number" id="lim_cooldown" min="0" max="3600" data-lim="cooldown"></span></div>
+        <div class="set" id="limBypassRow"><label for="lim_bypass_queue"><span class="lb">Можна в переповнену чергу</span></label>
+          <span class="switch"><input type="checkbox" id="lim_bypass_queue" data-lim="bypass_queue"><span></span></span></div>
       </div>
+      <div class="gtitle">Черга</div>
+      <div class="card">
+        <div class="set"><label for="max_queue"><span class="lb">Розмір черги</span><small>для всіх разом</small></label>
+          <span class="num"><input type="number" id="max_queue" min="1" max="200"></span></div>
+      </div>
+    </div></div>
+  </section>
 
-      <div class="group">Помічники</div>
-      <div class="field col">
-        <label for="helperNick">Люди з роллю «Помічники»<small>Без модерки. Що їм можна — позначте в командах вище.</small></label>
-        <form class="addnick" id="helperForm">
-          <input type="text" id="helperNick" placeholder="Нік у Twitch" autocomplete="off" spellcheck="false" aria-label="Нік помічника">
-          <button type="submit">Додати</button>
+  <!-- ── помічники ── -->
+  <section class="screen" id="pg-helpers" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Помічники</h1></div>
+    <div class="scroll"><div class="pad">
+      <p class="lead">Люди з роллю «Помічники» — без модерки на каналі. Що їм можна, позначте в «Командах й доступі».</p>
+      <div class="card"><div class="set col">
+        <form class="inline" id="helperForm">
+          <input class="tin" type="text" id="helperNick" placeholder="Нік у Twitch або посилання" autocomplete="off" spellcheck="false" aria-label="Нік помічника">
+          <button class="btn pri" type="submit">Додати</button>
         </form>
         <div class="nicks" id="helpers" aria-label="Помічники"></div>
-      </div>
-    </div>
+      </div></div>
+    </div></div>
+  </section>
 
-    <div class="view" id="v-rules" hidden>
-      <div class="form" id="rules">
-        <p class="note">Хто які команди може писати, ліміти замовлень і помічники — у вкладці «Команди».</p>
-
-        <div class="group">Що грає</div>
-        <div class="field"><label for="only_songs">Лише пісні з YouTube Music<small>без кліпів, «10 годин…» і відео з балачками</small></label>
-          <label class="switch"><input type="checkbox" id="only_songs" data-key="rules.only_songs"><span></span></label></div>
-        <div class="field"><label for="block_russian">Блокувати російську музику<small>російські виконавці та пісні російською — у бан автоматично</small></label>
-          <label class="switch"><input type="checkbox" id="block_russian" data-key="rules.block_russian"><span></span></label></div>
-        <div class="field"><label for="block_explicit">Без треків Explicit</label>
-          <label class="switch"><input type="checkbox" id="block_explicit" data-key="rules.block_explicit"><span></span></label></div>
-        <div class="field"><label for="interrupt_fallback">Замовлення перебиває фонову музику</label>
-          <label class="switch"><input type="checkbox" id="interrupt_fallback" data-key="rules.interrupt_fallback"><span></span></label></div>
-        <div class="field"><label for="normalize">Вирівнювати гучність<small>з наступного треку</small></label>
-          <label class="switch"><input type="checkbox" id="normalize" data-key="player.normalize"><span></span></label></div>
-        <div class="field col"><span class="lbl">Фонові плейлисти<small>Грають, коли черга порожня. Перемикати — над вкладками, під перемикачем «Музика».</small></span>
-          <ul class="pls" id="plsList"></ul>
+  <!-- ── фонові плейлисти ── -->
+  <section class="screen" id="pg-playlists" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Фонові плейлисти</h1></div>
+    <div class="scroll"><div class="pad">
+      <p class="lead">Грають, коли черга порожня. Перемкнути можна й на головному екрані — під чергою.</p>
+      <div class="card">
+        <div class="set col"><ul class="pls" id="plsList"></ul></div>
+        <div class="set col"><span class="lb">Додати плейлист</span>
           <form class="addpl" id="plForm">
-            <input type="text" id="plLink" placeholder="Посилання на плейлист YouTube Music" autocomplete="off" spellcheck="false" aria-label="Посилання на плейлист">
-            <input type="text" id="plName" placeholder="Назва (необов'язково)" autocomplete="off" aria-label="Назва плейлиста">
-            <button type="submit">Додати</button>
-          </form>
-        </div>
-        <div class="field"><label for="plShuffle">Перемішувати фоновий плейлист</label>
-          <label class="switch"><input type="checkbox" id="plShuffle"><span></span></label></div>
-        <div class="field col"><label for="banned_words">Заборонені слова<small>через кому — треки з ними в назві не додаються</small></label>
-          <textarea id="banned_words" rows="2" data-key="rules.banned_words" placeholder="10 hours, earrape"></textarea></div>
-
-        <div class="group">Чат</div>
-        <div class="field"><label for="announce_tracks">Писати в чат про кожен трек</label>
-          <label class="switch"><input type="checkbox" id="announce_tracks" data-key="chat.announce_tracks"><span></span></label></div>
-        <div class="field"><label for="greet_on_stream_start">Вітатися на початку трансляції</label>
-          <label class="switch"><input type="checkbox" id="greet_on_stream_start" data-key="chat.greet_on_stream_start"><span></span></label></div>
-        <div class="field"><label for="widget_pink">Рожевий віджет<small>завжди фірмовий рожевий, а не колір обкладинки</small></label>
-          <label class="switch"><input type="checkbox" id="widget_pink" data-key="widget.pink"><span></span></label></div>
+            <input class="tin" type="text" id="plLink" placeholder="Посилання на плейлист YouTube Music" autocomplete="off" spellcheck="false" aria-label="Посилання на плейлист">
+            <input class="tin" type="text" id="plName" placeholder="Назва (необов'язково)" autocomplete="off" aria-label="Назва плейлиста">
+            <button class="btn pri" type="submit">Додати</button>
+          </form></div>
+        <div class="set"><label for="plShuffle"><span class="lb">Перемішувати фоновий плейлист</span></label>
+          <span class="switch"><input type="checkbox" id="plShuffle"><span></span></span></div>
       </div>
-    </div>
+      <div class="gtitle">Звук</div>
+      <div class="card">
+        <div class="set"><label for="normalize"><span class="lb">Вирівнювати гучність</span><small>з наступного треку</small></label>
+          <span class="switch"><input type="checkbox" id="normalize" data-key="player.normalize"><span></span></span></div>
+      </div>
+    </div></div>
+  </section>
 
-    <div class="view" id="v-history" hidden>
-      <div class="rowhead"><h3>Нещодавно грали</h3></div>
-      <ul class="list" id="history"></ul>
-      <div class="rowhead" style="margin-top:16px"><h3>Заборонені треки й виконавці</h3></div>
-      <form class="search" id="banArtistForm">
-        <input id="banArtistName" type="text" placeholder="Ім'я виконавця, якого не грати" autocomplete="off" aria-label="Ім'я виконавця">
-        <button class="ib pink" type="submit">Заборонити</button>
-      </form>
-      <ul class="list" id="banned"></ul>
-    </div>
+  <!-- ── фільтри й бан-лист ── -->
+  <section class="screen" id="pg-filters" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Фільтри й бан-лист</h1></div>
+    <div class="scroll"><div class="pad">
+      <div class="gtitle">Що грає</div>
+      <div class="card">
+        <div class="set"><label for="only_songs"><span class="lb">Лише пісні з YouTube Music</span><small>без кліпів, «10 годин…» і відео з балачками</small></label>
+          <span class="switch"><input type="checkbox" id="only_songs" data-key="rules.only_songs"><span></span></span></div>
+        <div class="set"><label for="block_russian"><span class="lb">Блокувати російську музику</span><small>російські виконавці та пісні російською — у бан автоматично</small></label>
+          <span class="switch"><input type="checkbox" id="block_russian" data-key="rules.block_russian"><span></span></span></div>
+        <div class="set"><label for="block_explicit"><span class="lb">Без треків Explicit</span></label>
+          <span class="switch"><input type="checkbox" id="block_explicit" data-key="rules.block_explicit"><span></span></span></div>
+        <div class="set"><label for="interrupt_fallback"><span class="lb">Замовлення перебиває фонову музику</span></label>
+          <span class="switch"><input type="checkbox" id="interrupt_fallback" data-key="rules.interrupt_fallback"><span></span></span></div>
+        <label class="set col" for="banned_words"><span><span class="lb">Заборонені слова</span><small>через кому — треки з ними в назві не додаються</small></span>
+          <textarea id="banned_words" rows="2" data-key="rules.banned_words" placeholder="10 hours, earrape"></textarea></label>
+      </div>
+      <div class="gtitle">Заборонені треки й виконавці</div>
+      <div class="card">
+        <div class="set col">
+          <form class="inline" id="banArtistForm">
+            <input class="tin" id="banArtistName" type="text" placeholder="Ім'я виконавця, якого не грати" autocomplete="off" aria-label="Ім'я виконавця">
+            <button class="btn pri" type="submit">Заборонити</button>
+          </form>
+          <ul class="list" id="banned"></ul>
+        </div>
+      </div>
+    </div></div>
+  </section>
 
-    <div class="view" id="v-errors" hidden>
+  <!-- ── чат ── -->
+  <section class="screen" id="pg-chat" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Повідомлення в чат</h1></div>
+    <div class="scroll"><div class="pad">
+      <div class="card">
+        <div class="set"><label for="announce_tracks"><span class="lb">Писати в чат про кожен трек</span></label>
+          <span class="switch"><input type="checkbox" id="announce_tracks" data-key="chat.announce_tracks"><span></span></span></div>
+        <div class="set"><label for="greet_on_stream_start"><span class="lb">Вітатися на початку трансляції</span></label>
+          <span class="switch"><input type="checkbox" id="greet_on_stream_start" data-key="chat.greet_on_stream_start"><span></span></span></div>
+      </div>
+      <p class="lead" style="padding-top:12px">Текст відповіді на «!музика» — у «Командах й доступі».</p>
+    </div></div>
+  </section>
+
+  <!-- ── акаунти ── -->
+  <section class="screen" id="pg-accounts" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Акаунти</h1></div>
+    <div class="scroll"><div class="pad">
+      <div class="card" id="accRows"></div>
+      <p class="lead" style="padding-top:12px">Змінити акаунт бота чи вхід у Google — у <a href="#" id="setupLink">майстрі налаштування</a>.</p>
+    </div></div>
+  </section>
+
+  <!-- ── OBS і віджет ── -->
+  <section class="screen" id="pg-obs" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>OBS і віджет</h1></div>
+    <div class="scroll"><div class="pad">
+      <div class="gtitle">Віджет «зараз грає»</div>
+      <div class="card">
+        <div class="set col"><div class="wprev" id="wprev"><iframe id="wframe" title="Приклад віджета" tabindex="-1"></iframe></div></div>
+        <div class="set"><label for="widget_pink"><span class="lb">Рожевий віджет</span><small>завжди фірмовий рожевий, а не колір обкладинки</small></label>
+          <span class="switch"><input type="checkbox" id="widget_pink" data-key="widget.pink"><span></span></span></div>
+        <div class="set"><span><span class="lb">Адреса для OBS</span><small id="widgetUrl">Джерело «Браузер», 520 × 160</small></span>
+          <button class="btn" id="copyWidget">Копіювати</button></div>
+      </div>
+      <div class="gtitle">OBS</div>
+      <div class="card">
+        <div class="set"><span><span class="lb">Трансляція</span><small>музика вмикається сама лише з трансляцією</small></span><span id="obsState" class="state-off">—</span></div>
+        <div class="set"><span><span class="lb">Звук у трансляцію</span><small>«Захоплення звуку програми» → mpv.exe</small></span><span id="mpvState" class="state-off">—</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ── оновлення ── -->
+  <section class="screen" id="pg-update" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Оновлення</h1></div>
+    <div class="scroll"><div class="pad">
+      <div class="card">
+        <div class="set"><span><span class="lb" id="updVer">pipabobik</span><small id="updState">Нові версії завантажуються з GitHub</small></span>
+          <button class="btn" id="updBtn">Перевірити</button></div>
+      </div>
+      <p class="lead" style="padding-top:12px">Перед оновленням pipabobik завжди спитає. Черга, налаштування й бан-лист зберігаються.</p>
+    </div></div>
+  </section>
+
+  <!-- ── помилки ── -->
+  <section class="screen" id="pg-errors" hidden data-parent="scr-settings">
+    <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Помилки</h1></div>
+    <div class="scroll"><div class="pad">
       <div class="errtools">
-        <p>Збої бота: що сталося, коли й де. Якщо незрозуміло — скопіюйте й надішліть розробнику.</p>
-        <button class="ghost" id="errCopy">Скопіювати</button>
-        <button class="ghost" id="errClear">Очистити</button>
+        <p>Що сталося, коли й де. Якщо незрозуміло — скопіюйте й надішліть розробнику.</p>
+        <button class="btn sm" id="errCopy">Скопіювати</button>
+        <button class="btn sm" id="errClear">Очистити</button>
       </div>
       <ul class="errs" id="errs"><li class="empty">Помилок немає. Якщо щось піде не так, воно з'явиться тут.</li></ul>
-    </div>
+    </div></div>
   </section>
+  </div>
 </div>
 
-<footer>
-  <button class="ghost" id="copyWidget" title="Скопіювати адресу віджета для OBS">Адреса віджета</button>
-  <div class="foot-r">
-    <button class="ghost" id="updBtn" title="Перевірити, чи є нова версія на GitHub">Оновлення</button>
-    <button class="ghost" id="restartBtn" title="Перезапустити бота: музика замовкне на кілька секунд, черга збережеться">Перезапустити</button>
-    <button class="ghost danger" id="quitBtn">Вимкнути pipabobik</button>
-  </div>
-</footer>
+<div class="menu" id="menu" role="menu" hidden>
+  <a role="menuitem" id="mOpen" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg>Відкрити в YouTube Music</a>
+  <button role="menuitem" id="mCopy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>Копіювати посилання</button>
+  <hr>
+  <button role="menuitem" class="bad" data-act="ban"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg>Заборонити трек і пропустити</button>
+  <button role="menuitem" class="bad" id="banArtistNow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4.5 20c.8-3.6 3.8-5.5 7.5-5.5 1.5 0 2.9.3 4 .9M16 16l5 5M21 16l-5 5"/></svg><span id="banArtistLabel">Заборонити виконавця</span></button>
+</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="ask" id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="askTitle">
   <div class="box">
-    <h2 id="askTitle"></h2>
-    <p id="askText"></p>
-    <div class="btns"><button class="ghost" id="askNo">Скасувати</button><button class="pri" id="askYes"></button></div>
+    <div class="body"><h2 id="askTitle"></h2><p id="askText"></p></div>
+    <div class="btns"><button class="btn pri" id="askYes"></button><button class="btn" id="askNo">Скасувати</button></div>
   </div>
 </div>
 <div class="offline" id="offline"><div><h2 id="offTitle">Бот не запущено</h2><p class="muted" id="offText">Він стартує разом з OBS. Якщо OBS уже відкрито — зачекайте кілька секунд.</p></div></div>
-
 <script>
 (() => {
   const key = new URLSearchParams(location.search).get("key") || "";
@@ -505,6 +754,9 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmt = (s) => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   const cssUrl = (u) => u ? `url("${String(u).replace(/"/g, "%22")}")` : "";
+  const xIcon = '<svg viewBox="0 0 24 24"><path d="M6.4 5L5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>';
+  const heartPath = '<path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.9 1.3-1.8 2.9-2.9 4.9-2.9 3.5 0 5.6 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/>';
+  const artistIcon = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6z"/><path d="M3 4.4L4.4 3 21 19.6 19.6 21z"/></svg>';
 
   // ── обкладинка: перевіряємо, що картинка справді є ──
   // Порядок: обкладинка треку → кадр з відео YouTube → лише платівка.
@@ -530,6 +782,60 @@
     for (const u of tries) if (u && await probeCover(u)) return u;
     return "";
   }
+
+  // ── колір картки з обкладинки (раз на трек, 24×24 пікселі — майже без навантаження) ──
+  function rgb2hsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (max === min) return { h: 0, s: 0, l };
+    const d = max - min, s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: h * 60, s, l };
+  }
+  function dominant(img) {
+    try {
+      const c = document.createElement("canvas");
+      c.width = c.height = 24;
+      const x = c.getContext("2d", { willReadFrequently: true });
+      x.drawImage(img, 0, 0, 24, 24);
+      const px = x.getImageData(0, 0, 24, 24).data;
+      const bins = Array.from({ length: 18 }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+      for (let i = 0; i < px.length; i += 4) {
+        const { h, s, l } = rgb2hsl(px[i], px[i + 1], px[i + 2]);
+        const w = s * (1 - Math.abs(l - 0.5) * 1.6);
+        if (w <= 0.05) continue;
+        const bn = bins[Math.floor(h / 20) % 18];
+        bn.w += w; bn.r += px[i] * w; bn.g += px[i + 1] * w; bn.b += px[i + 2] * w;
+      }
+      const best = bins.reduce((a, b) => (b.w > a.w ? b : a));
+      if (best.w < 8) return { h: 0, s: 0, l: 0.5 };  // чорно-біла обкладинка
+      return rgb2hsl(best.r / best.w, best.g / best.w, best.b / best.w);
+    } catch { return null; }
+  }
+  const hsla = (h, s, l, a = 1) => `hsla(${h.toFixed(0)}, ${(s * 100).toFixed(0)}%, ${(l * 100).toFixed(0)}%, ${a})`;
+  const PINK = { h: 330, s: 0.9, l: 0.6 };
+  let tintOn = null, painted = "";
+  function paint(c) {
+    c = c || PINK;
+    const s = c.s < 0.08 ? 0 : Math.min(1, c.s);
+    const id = `${Math.round(c.h)}/${s.toFixed(2)}`;
+    if (id === painted) return;
+    painted = id;
+    const next = tintOn === $("tintA") ? $("tintB") : $("tintA");
+    next.style.background = `linear-gradient(160deg, ${hsla(c.h, Math.min(s, 0.8), 0.38, 0.42)}, rgba(42, 13, 34, .96) 62%)`;
+    next.classList.add("on");
+    if (tintOn) tintOn.classList.remove("on");
+    tintOn = next;
+    $("player").style.setProperty("--acc", s === 0 ? "#f1e6ec" : hsla(c.h, Math.max(s, 0.6), 0.82));
+  }
+  function tintFrom(url) {
+    if (!url) return paint(PINK);
+    const im = new Image();
+    im.onload = () => paint(dominant(im) || PINK);
+    im.onerror = () => paint(PINK);
+    im.src = /^https?:/.test(url) ? `/cover?u=${encodeURIComponent(url)}` : url;  // через бота — тоді картинку можна прочитати
+  }
+
   let coverToken = 0;
   async function setCover(n) {
     const my = ++coverToken;
@@ -537,15 +843,16 @@
     if (my !== coverToken) return;
     $("sleeve").style.backgroundImage = cssUrl(url);
     $("label").style.backgroundImage = cssUrl(url);
-    $("deck").classList.toggle("nocover", !!n && !url);  // немає обкладинки — лише платівка
+    $("deck").classList.toggle("nocover", !!n && !url);
+    tintFrom(url);
   }
-  // мініатюри в списках: обкладинка, під нею кадр з відео, під ним — платівка (CSS)
   const thumbs = (t) => [t.cover, t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : ""].filter(Boolean).map(cssUrl).join(", ");
-  let state = null, receivedAt = 0, currentId = null, volDrag = false;
+  let state = null, receivedAt = 0, currentId, volDrag = false;  // currentId спершу undefined — перший стан завжди малює картку
+  paint(PINK);
 
   function toast(text) {
     const t = $("toast"); t.textContent = text; t.classList.add("show");
-    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1800);
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2000);
   }
   async function api(path, body, method = "POST") {
     const r = await fetch(path, { method, headers: { "Content-Type": "application/json", "X-Pipabobik-Key": key }, body: body ? JSON.stringify(body) : undefined });
@@ -555,6 +862,13 @@
     return data;
   }
   const control = (action, extra = {}) => api("/api/control", { action, ...extra });
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch {
+      const ta = document.createElement("textarea"); ta.value = text; document.body.append(ta); ta.select();
+      const ok = document.execCommand("copy"); ta.remove(); return ok;
+    }
+  }
   // власне вікно підтвердження: у вікні застосунку системні confirm() можуть не показуватися
   function ask(title, text, yes = "Так", danger = false) {
     return new Promise((done) => {
@@ -566,7 +880,7 @@
       box.hidden = false;
       $("askNo").focus();  // Enter випадково не підтвердить
       const end = (v) => { box.hidden = true; document.removeEventListener("keydown", key, true); $("askYes").onclick = $("askNo").onclick = box.onclick = null; if (prev && prev.focus) prev.focus(); done(v); };
-      const key = (e) => { if (e.key === "Escape") { e.preventDefault(); end(false); } };
+      const key = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); end(false); } };
       document.addEventListener("keydown", key, true);
       $("askYes").onclick = () => end(true);
       $("askNo").onclick = () => end(false);
@@ -576,12 +890,54 @@
   // головний виконавець: «A feat. B», «A, B», «A & B» → A
   const mainArtist = (a) => String(a || "").split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\sx\s)\s*/i)[0].trim();
   async function banArtist(extra, name) {
-    if (!await ask(`Заборонити виконавця «${name}»?`, "Усі його треки (і спільні) зникнуть з черги й більше не гратимуть — ні з чату, ні у фоні. Розбанити можна у вкладці «Історія».", "Заборонити", true)) return;
+    if (!await ask(`Заборонити виконавця «${name}»?`, "Усі його треки (і спільні) зникнуть з черги й більше не гратимуть — ні з чату, ні у фоні. Розбанити можна в Налаштуваннях → Фільтри й бан-лист.", "Заборонити", true)) return;
     try {
       const r = await control("ban_artist", extra);
       toast(`Виконавця ${r.banned_artist || name} заборонено${r.removed ? ` · з черги прибрано: ${r.removed}` : ""}`);
     } catch {}
   }
+
+  // ── екрани: ефір → налаштування → розділ, усе в тому самому вікні ──
+  let screen = "scr-main";
+  function go(id) {
+    if (!$(id)) return;
+    closeMenu();
+    document.querySelectorAll(".screen").forEach((x) => x.hidden = x.id !== id);
+    screen = id;
+    if (id === "scr-settings") { loadSettings(); loadAccess(); renderAccounts(); }
+    if (["pg-commands", "pg-limits", "pg-helpers"].includes(id)) loadAccess();
+    if (["pg-filters", "pg-chat", "pg-obs", "pg-playlists"].includes(id)) loadSettings();
+    if (id === "pg-playlists") loadPlaylists();
+    if (id === "pg-errors") loadErrors(true);
+    if (id === "pg-accounts") renderAccounts();
+    widgetPreview(id === "pg-obs");
+    const f = $(id).querySelector("[data-back]") || $("q");
+    if (id !== "scr-main" && f) f.focus({ preventScroll: true });
+  }
+  function back() {
+    if (screen === "scr-main") return false;
+    go($(screen).dataset.parent || "scr-main");
+    return true;
+  }
+  document.querySelectorAll("[data-back]").forEach((b) => b.onclick = back);
+  document.querySelectorAll("[data-go]").forEach((b) => b.onclick = () => go(b.dataset.go));
+  $("setBtn").onclick = () => go("scr-settings");
+  // пошук параметра
+  $("setFind").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    let any = false;
+    document.querySelectorAll("#setList .card").forEach((card) => {
+      let vis = 0;
+      card.querySelectorAll(".set").forEach((r) => {
+        const hit = !q || (r.textContent + " " + (r.dataset.k || "")).toLowerCase().includes(q);
+        r.hidden = !hit; if (hit) vis++;
+      });
+      card.hidden = !vis;
+      card.previousElementSibling.hidden = !vis;
+      if (vis) any = true;
+    });
+    $("setNone").hidden = any;
+  });
 
   // ── стан ──
   const icons = {
@@ -589,88 +945,122 @@
     play: '<path d="M8 5l11 7-11 7z"/>',
   };
 
-  function renderChips(h, s) {
-    const c = [];
-    if (h.obs_live) c.push('<span class="chip live"><i></i>В ефірі</span>');
-    else if (h.obs_live === false) c.push('<span class="chip"><i></i>Не в ефірі</span>');
-    c.push(h.twitch
-      ? `<span class="chip ${h.chat ? "ok" : "bad"}" title="Бот: ${esc(h.twitch)}"><i></i>Twitch</span>`
-      : `<a class="chip bad" href="/auth" target="_blank" title="Натисніть, щоб увійти в Twitch"><i></i>Увійти в Twitch</a>`);
-    c.push(`<span class="chip ${h.mpv ? "ok" : "bad"}" title="${h.mpv ? "Програвач знайдено" : "mpv не знайдено"}"><i></i>Звук</span>`);
-    if (h.google !== null && h.google !== undefined)
-      c.push(`<span class="chip ${h.google ? "ok" : ""}" title="${h.google ? "Вхід у Google є" : "Без входу в Google"}"><i></i>Google</span>`);
-    $("chips").innerHTML = c.join("");
+  function renderStatus(h, s) {
+    const st = $("status");
+    const streaming = !!s.streaming, active = !!s.active;
+    st.className = "status" + (streaming ? " live" : active ? " test" : "");
+    $("statusText").textContent = streaming ? (active ? "В ефірі" : "В ефірі · музика вимкнена") : (active ? "Тестовий режим" : "Тест без стріму");
+    st.title = streaming
+      ? (active ? "Музика грає в ефірі. Натисніть, щоб вимкнути" : "Натисніть, щоб увімкнути музику")
+      : (active ? "Музика грає без трансляції — щоб перевірити віджет. Натисніть, щоб вимкнути" : "Музика вмикається сама з трансляцією. Натисніть, щоб увімкнути без неї — перевірити віджет");
+    // одна найважливіша проблема — над карткою
+    let a = null;
+    if (!h.twitch) a = { t: "Бот не увійшов у Twitch", x: "Замовлення з чату не приходитимуть", act: `<a class="btn pri sm" href="/auth" target="_blank">Увійти</a>` };
+    else if (h.chat === false) a = { t: "Чат Twitch не відповідає", x: "замовлення не приходять — бот перепідключається сам", act: `<button class="btn sm" data-restart>Перезапустити</button>` };
+    else if (h.mpv === false) a = { t: "Програвач не знайдено", x: "без mpv музика не гратиме — перевстановіть pipabobik", act: "" };
+    $("alert").hidden = !a;
+    if (a) { $("alertTitle").textContent = a.t; $("alertText").textContent = a.x; $("alertAct").innerHTML = a.act; }
+    $("obsState").className = h.obs_live ? "state-ok" : "state-off";
+    $("obsState").textContent = h.obs_live ? "в ефірі" : h.obs_live === false ? "підключено" : "без OBS";
+    $("mpvState").className = h.mpv ? "state-ok" : "state-bad";
+    $("mpvState").textContent = h.mpv ? "працює" : "mpv не знайдено";
+    if (screen === "pg-accounts") renderAccounts();
   }
+  function renderAccounts() {
+    const h = (state && state.health) || {};
+    const row = (lb, sm, ok, act = "") => `<div class="set"><span><span class="lb">${lb}</span><small>${sm}</small></span>${act || `<span class="${ok ? "state-ok" : ok === false ? "state-bad" : "state-off"}">${ok ? "так" : ok === false ? "ні" : "—"}</span>`}</div>`;
+    $("accRows").innerHTML =
+      row("Twitch: бот", h.twitch ? `акаунт @${esc(h.twitch)}` : "не увійшов", !!h.twitch, h.twitch ? "" : `<a class="btn pri sm" href="/auth" target="_blank">Увійти</a>`)
+      + row("Чат Twitch", h.chat ? "з'єднання є, замовлення приходять" : "немає з'єднання", h.twitch ? !!h.chat : null)
+      + row("Google (YouTube Music)", h.google ? "увійдено — працюють лайки й «Вподобані»" : "без входу: пошук працює, лайки — ні", h.google === null || h.google === undefined ? null : !!h.google)
+      + row("Програвач mpv", h.mpv ? "знайдено" : "не знайдено", !!h.mpv);
+    $("hintAcc").textContent = [h.twitch ? `бот: ${h.twitch}` : "бот не увійшов", h.google ? "Google: увійдено" : "Google: без входу"].join(" · ");
+  }
+  $("setupLink").href = `/setup?key=${encodeURIComponent(key)}`;
+  $("status").onclick = async () => {
+    if (!state) return;
+    if (state.active) {
+      if (!await ask("Вимкнути музику?", state.streaming ? "Музика в ефірі замовкне. Черга збережеться." : "Тестовий режим вимкнеться. З трансляцією музика ввімкнеться сама.", "Вимкнути")) return;
+      control("off").then(() => toast("Музику вимкнено"));
+    } else control("on").then(() => toast(state.streaming ? "Музику увімкнено" : "Тестовий режим — грає без трансляції"));
+  };
+  document.body.addEventListener("click", (e) => { if (e.target.closest("[data-restart]")) restart(); });
 
   function renderNow(s) {
     const n = s.now;
     if (skippingId && (!n || n.video_id !== skippingId) && s.status !== "loading") setSkipping(null);
     $("player").classList.toggle("playing", s.status === "playing");
-    $("playIcon").innerHTML = s.status === "paused" ? icons.play : icons.pause;
-    $("playBtn").setAttribute("aria-label", s.status === "paused" ? "Продовжити" : "Пауза");
-    $("onair").checked = !!s.active;
-    // сама музика вмикається лише з трансляцією; без неї перемикач — тестовий режим (для віджета)
-    $("onairHint").textContent = s.active
-      ? (s.streaming ? (s.status === "idle" ? "В ефірі — чекаю на замовлення" : "Грає в ефірі") : "Тестовий режим — грає без трансляції")
-      : "Вимкнено — увімкнеться з початком трансляції";
+    const pl = s.status === "paused" || !s.active;
+    $("playIcon").innerHTML = pl ? icons.play : icons.pause;
+    $("playBtn").setAttribute("aria-label", pl ? "Продовжити" : "Пауза");
+    $("playBtn").title = pl ? "Грати (пробіл)" : "Пауза (пробіл)";
     if (!volDrag) { $("vol").value = s.volume; $("volv").textContent = s.volume; }
-    const artistNow = n ? mainArtist(n.artist) : "";
-    $("banArtistNow").hidden = !artistNow;
-    $("banArtistNow").textContent = artistNow ? `Заборонити виконавця ${artistNow}` : "";
     const liked = !!(n && n.liked);
     $("likeBtn").classList.toggle("on", liked);
     $("likeBtn").setAttribute("aria-pressed", liked);
-    $("likeBtn").title = liked ? "Прибрати лайк у YouTube Music" : "Лайкнути в YouTube Music";
+    $("likeBtn").title = liked ? "Прибрати лайк у YouTube Music (L)" : "Лайк у YouTube Music (L)";
 
     const id = n ? n.video_id : null;
     if (id === currentId) return;
     const fill = () => {
       $("title").textContent = n ? n.title : "Нічого не грає";
-      $("artist").textContent = n ? (n.artist || "") : (s.active ? "Замовлення з чату з'являться тут" : "Музику вимкнено");
+      $("title").title = n ? n.title : "";
+      $("artist").textContent = n ? (n.artist || "") : (s.active ? "Замовлення з чату з'являться тут" : "Музика вмикається сама з трансляцією");
       $("dur").textContent = n && n.duration ? fmt(n.duration) : "0:00";
-      const who = $("who");
-      if (n && n.source === "request") { who.textContent = `від @${n.requested_by}`; who.classList.remove("plain"); }
-      else if (n) { who.textContent = "фоновий плейлист"; who.classList.add("plain"); }
-      else who.textContent = "";
+      $("who").textContent = !n ? "" : n.source === "request" ? `замовив(ла) @${n.requested_by}` : `фоновий плейлист${pls ? ` «${plName(pls.active)}»` : ""}`;
+      $("whoRow").style.visibility = n ? "visible" : "hidden";
       setCover(n);
+      if (!n) paint(PINK);
     };
     if (currentId && id) { $("deck").classList.add("swap"); setTimeout(() => { fill(); $("deck").classList.remove("swap"); }, 650); }
     else fill();
     currentId = id;
   }
 
-  function trackRow(t, actions) {
-    return `<li class="item"><div class="cv" style="background-image:${esc(thumbs(t))}"></div>
-      <div style="min-width:0"><div class="tt">${esc(t.title)}</div>
-      <div class="aa">${esc(t.artist || "")}${t.duration ? " · " + fmt(t.duration) : ""}${t.requested_by ? " · @" + esc(t.requested_by) : ""}</div></div>
-      <div class="acts">${actions}</div></li>`;
+  const meta = (t, who = true) => esc(t.artist || "") + (who && t.requested_by ? " · @" + esc(t.requested_by) : "");
+  function row(t, right, sub) {
+    return `<li class="row"><div class="cv" style="background-image:${esc(thumbs(t))}"></div>
+      <div class="tx"><div class="tt" title="${esc(t.title)}">${esc(t.title)}</div><div class="aa">${sub ?? meta(t)}</div></div>
+      <div class="rt">${right}</div></li>`;
   }
+  const banBtn = (t) => mainArtist(t.artist) ? `<button class="sq hov" data-banartist="${esc(t.video_id)}" data-name="${esc(mainArtist(t.artist))}" title="Заборонити виконавця ${esc(mainArtist(t.artist))}" aria-label="Заборонити виконавця ${esc(mainArtist(t.artist))}">${artistIcon}</button>` : "";
 
+  function remainingNow(s) {
+    const n = s.now;
+    if (!n || !n.duration) return 0;
+    const el = (n.elapsed || 0) + (s.status === "playing" ? (performance.now() - receivedAt) / 1000 : 0);
+    return Math.max(0, n.duration - el);
+  }
   function renderQueue(s) {
-    $("qn").textContent = s.queue_len || "";
+    $("qn").textContent = s.queue_len ? `· ${s.queue_len}` : "";
     errorsBadge(s.errors);
     renderUpdate(s);
-    $("qhead").textContent = s.queue_len ? `Далі в черзі · ${s.queue_len}` : "Далі в черзі";
     $("clearBtn").hidden = !s.queue_len;
-    $("queue").innerHTML = s.queue.length ? s.queue.map((t, i) => trackRow(t, `
-        <button class="ib" data-q="next" data-i="${i}" title="Зіграти наступним" aria-label="Зіграти наступним" ${i === 0 ? "disabled" : ""}>
-          <svg viewBox="0 0 24 24"><path d="M5 4h14v3H5zM12 9l6 7h-4v4h-4v-4H6z"/></svg></button>
-        ${mainArtist(t.artist) ? `<button class="ib" data-banartist="${esc(t.video_id)}" data-name="${esc(mainArtist(t.artist))}" title="Заборонити виконавця ${esc(mainArtist(t.artist))}" aria-label="Заборонити виконавця"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6z"/><path d="M3 4.4L4.4 3 21 19.6 19.6 21z"/></svg></button>` : ""}
-        <button class="ib" data-q="remove" data-i="${i}" title="Прибрати" aria-label="Прибрати з черги">
-          <svg viewBox="0 0 24 24"><path d="M6.4 5L5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>`)).join("")
-      : `<li class="empty"><b>Черга порожня</b>Глядачі замовляють командою в чаті, а ви — у вкладці «Додати».</li>`;
+    let t0 = remainingNow(s), known = true;
+    const etas = s.queue.map((t) => { const at = t0; if (!t.duration) known = false; t0 += t.duration || 0; return known ? at : null; });
+    $("qEnd").textContent = s.queue.length && known && s.status !== "paused"
+      ? `усе дограє о ${new Date(Date.now() + t0 * 1000).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}` : "";
+    $("queue").innerHTML = s.queue.length ? s.queue.map((t, i) => {
+      const eta = etas[i] === null ? (t.duration ? fmt(t.duration) : "") : etas[i] < 50 ? "далі" : `через ${Math.max(1, Math.round(etas[i] / 60))} хв`;
+      return row(t, `<span class="eta">${eta}</span>
+        ${i ? `<button class="btn sm hov" data-q="next" data-i="${i}" title="Зіграти наступним">Наступним</button>` : ""}
+        ${banBtn(t)}
+        <button class="sq hov" data-q="remove" data-i="${i}" title="Прибрати з черги" aria-label="Прибрати з черги">${xIcon}</button>`);
+    }).join("")
+      : `<li class="empty"><b>Черга порожня</b>Глядачі замовляють командою в чаті, а ви — через рядок пошуку вище.</li>`;
   }
 
   function renderHistory(s) {
-    $("history").innerHTML = (s.history || []).length ? s.history.map((t) => trackRow(t,
-      `<button class="ib heart ${t.liked ? "on" : ""}" data-like="${esc(t.video_id)}" data-liked="${t.liked ? 1 : 0}" title="${t.liked ? "Прибрати лайк" : "Лайкнути в YouTube Music"}" aria-label="Лайк"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.9 1.3-1.8 2.9-2.9 4.9-2.9 3.5 0 5.6 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
-       ${mainArtist(t.artist) ? `<button class="ib" data-banartist="${esc(t.video_id)}" data-name="${esc(mainArtist(t.artist))}" title="Заборонити виконавця ${esc(mainArtist(t.artist))}" aria-label="Заборонити виконавця"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6z"/><path d="M3 4.4L4.4 3 21 19.6 19.6 21z"/></svg></button>` : ""}
-       <button class="ib" data-again='${esc(JSON.stringify(t))}' title="Поставити в чергу ще раз">Ще раз</button>`)).join("")
+    $("history").innerHTML = (s.history || []).length ? s.history.map((t) => row(t,
+      `<button class="sq heart ${t.liked ? "on" : ""}" data-like="${esc(t.video_id)}" data-liked="${t.liked ? 1 : 0}" title="${t.liked ? "Прибрати лайк" : "Лайкнути в YouTube Music"}" aria-label="Лайк"><svg viewBox="0 0 24 24">${heartPath}</svg></button>
+       ${banBtn(t)}
+       <button class="btn sm hov" data-again='${esc(JSON.stringify(t))}' title="Поставити в чергу ще раз">Ще раз</button>`)).join("")
       : `<li class="empty">Тут з'являться треки, що вже відіграли.</li>`;
-    $("banned").innerHTML = (s.banned || []).length ? s.banned.map((b) =>
-      `<li class="item" style="grid-template-columns:1fr auto"><div class="tt">${esc(b.label)}</div>
-       <button class="ib" data-unban="${esc(b.video_id)}">Розбанити</button></li>`).join("")
-      : `<li class="empty">Заборонених треків і виконавців немає.</li>`;
+    const banned = s.banned || [];
+    $("banned").innerHTML = banned.length ? banned.map((b) =>
+      `<li class="pl"><span class="nm">${esc(b.label)}</span><button class="btn sm" data-unban="${esc(b.video_id)}">Розбанити</button></li>`).join("")
+      : `<li class="empty" style="padding:14px">Заборонених треків і виконавців немає.</li>`;
+    $("hintBans").textContent = (s.banned || []).length ? `заборонено: ${banned.length}` : "що не грати: російське, кліпи, заборонені треки";
   }
 
   let restartFrom = null;
@@ -681,7 +1071,8 @@
     if (pls && s.fallback !== undefined && s.fallback !== pls.active && document.activeElement !== $("fbSelect")) loadPlaylists();
     $("seekBar").classList.toggle("can", canSeek());
     $("offline").classList.remove("show");
-    renderChips(s.health || {}, s); renderNow(s); renderQueue(s); renderHistory(s); tick();
+    renderStatus(s.health || {}, s); renderNow(s); renderQueue(s); renderHistory(s); tick();
+    if (!$("v-add").hidden) markQueued();
   }
 
   let lastProgress = -1;
@@ -786,6 +1177,7 @@
     if (id) skipTimer = setTimeout(() => setSkipping(null), 10000);
   }
   document.querySelectorAll("[data-act]").forEach((b) => b.onclick = async () => {
+    closeMenu();
     if (!state || !state.now) return toast("Зараз нічого не грає");
     if (skippingId) return;
     const act = b.dataset.act, vid = state.now.video_id;
@@ -797,7 +1189,7 @@
       else toast(act === "ban" ? "Трек заборонено" : "Пропущено");
     } catch { setSkipping(null); }
   });
-  $("likeBtn").onclick = async () => {
+  async function like() {
     if (!state || !state.now) return toast("Зараз нічого не грає");
     const want = !state.now.liked;
     const btn = $("likeBtn");
@@ -807,15 +1199,51 @@
       await control("like", { video_id: state.now.video_id, like: want });
       toast(want ? "Лайкнуто в YouTube Music ♥" : "Лайк прибрано");
     } catch { btn.classList.toggle("on", !want); }
-  };
+  }
+  $("likeBtn").onclick = like;
   $("vol").oninput = (e) => { volDrag = true; $("volv").textContent = e.target.value; };
   $("vol").onchange = (e) => { volDrag = false; control("volume", { value: +e.target.value }); };
-  $("onair").onchange = (e) => control(e.target.checked ? "on" : "off").then(() => toast(e.target.checked ? "Музику увімкнено" : "Музику вимкнено"));
   $("clearBtn").onclick = async () => { if (await ask("Очистити всю чергу?", "Усі замовлені треки зникнуть з черги.", "Очистити", true)) control("clear").then(() => toast("Чергу очищено")); };
+
+  // ── меню «ще» для треку, що грає ──
+  function openMenu() {
+    if (!state || !state.now) return toast("Зараз нічого не грає");
+    const n = state.now, m = $("menu");
+    const link = /^demo/.test(n.video_id) ? "" : `https://music.youtube.com/watch?v=${encodeURIComponent(n.video_id)}`;
+    $("mOpen").href = link || "#";
+    $("mOpen").hidden = $("mCopy").hidden = !link;
+    const art = mainArtist(n.artist);
+    $("banArtistNow").hidden = !art;
+    $("banArtistLabel").textContent = `Заборонити виконавця ${art}`;
+    m.hidden = false;
+    const r = $("moreBtn").getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px";
+    m.style.top = (r.bottom + 4 + h > innerHeight - 8 ? r.top - h - 4 : r.bottom + 4) + "px";
+    $("moreBtn").setAttribute("aria-expanded", "true");
+    (m.querySelector("a:not([hidden]), button:not([hidden])") || m).focus();
+  }
+  function closeMenu() {
+    if ($("menu").hidden) return false;
+    $("menu").hidden = true;
+    $("moreBtn").setAttribute("aria-expanded", "false");
+    return true;
+  }
+  $("moreBtn").onclick = (e) => { e.stopPropagation(); if (!closeMenu()) openMenu(); };
+  document.addEventListener("pointerdown", (e) => { if (!e.target.closest("#menu, #moreBtn")) closeMenu(); });
+  $("menu").addEventListener("keydown", (e) => {
+    const items = [...$("menu").querySelectorAll("a:not([hidden]), button:not([hidden])")];
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    if (e.key === "Tab") closeMenu();
+  });
+  $("mOpen").addEventListener("click", () => setTimeout(closeMenu, 0));
+  $("mCopy").onclick = async () => { closeMenu(); if (await copyText($("mOpen").href)) toast("Посилання скопійовано"); };
+  $("banArtistNow").onclick = () => { closeMenu(); if (state && state.now) banArtist({ video_id: state.now.video_id }, mainArtist(state.now.artist)); };
 
   document.body.addEventListener("click", async (e) => {
     const q = e.target.closest("[data-q]");
-    if (q) return control(q.dataset.q === "next" ? "next" : "remove", { index: +q.dataset.i });
+    if (q) return control(q.dataset.q === "next" ? "next" : "remove", { index: +q.dataset.i }).then(() => q.dataset.q === "next" && toast("Заграє наступним"));
     const lk = e.target.closest("[data-like]");
     if (lk) {
       const want = lk.dataset.liked !== "1";
@@ -829,23 +1257,77 @@
     const again = e.target.closest("[data-again]");
     if (again) { try { await api("/api/add", { track: JSON.parse(again.dataset.again), mode: "end" }); toast("Додано в чергу"); } catch {} return; }
     const add = e.target.closest("[data-add]");
-    if (add) {
-      const t = lastResults[+add.dataset.i];
-      try {
-        await api("/api/add", { track: t, mode: add.dataset.add });
-        toast({ end: "Додано в чергу", next: "Заграє наступним", now: "Вмикаю" }[add.dataset.add]);
-      } catch {}
-    }
+    if (add) addResult(+add.dataset.i, add.dataset.add);
   });
 
-  // ── вкладки ──
-  document.querySelectorAll(".tab").forEach((t) => t.onclick = () => {
-    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x === t));
-    document.querySelectorAll(".view").forEach((v) => v.hidden = v.id !== "v-" + t.dataset.tab);
-    if (t.dataset.tab === "rules") { loadSettings(); loadPlaylists(); }
-    if (t.dataset.tab === "cmds") loadAccess();
-    if (t.dataset.tab === "add") $("q").focus();
-    if (t.dataset.tab === "errors") loadErrors(true);
+  // ── черга / історія / результати пошуку ──
+  function showList(which) {
+    $("v-queue").hidden = which !== "queue";
+    $("v-history").hidden = which !== "history";
+    $("v-add").hidden = which !== "add";
+    $("tabs").hidden = which === "add";
+    $("resHead").hidden = which !== "add";
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x.dataset.tab === which));
+  }
+  document.querySelectorAll(".tab").forEach((t) => t.onclick = () => showList(t.dataset.tab));
+  const closeResults = () => { if ($("v-add").hidden) return false; showList("queue"); $("q").value = ""; return true; };
+  $("resClose").onclick = closeResults;
+
+  // ── пошук ──
+  let lastResults = [];
+  function markQueued() {
+    const pos = new Map((state ? state.queue : []).map((t, i) => [t.video_id, i + 1]));
+    document.querySelectorAll("#results [data-res]").forEach((el) => {
+      const t = lastResults[+el.dataset.res], p = t && pos.get(t.video_id);
+      el.querySelector(".note2").textContent = p ? `уже в черзі · №${p}` : "";
+      el.querySelector(".pri").hidden = !!p;
+    });
+  }
+  async function addResult(i, mode) {
+    const t = lastResults[i];
+    if (!t) return;
+    try {
+      await api("/api/add", { track: t, mode });
+      toast({ end: "Додано в чергу", next: "Заграє наступним", now: "Вмикаю" }[mode]);
+    } catch {}
+  }
+  $("searchForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const q = $("q").value.trim();
+    if (!q) return;
+    showList("add");
+    $("results").innerHTML = `<li class="empty">Шукаю…</li>`;
+    try {
+      const { results } = await api("/api/search", { q });
+      lastResults = results;
+      $("results").innerHTML = results.length ? results.map((t, i) => row(t,
+        `<span class="note2"></span>
+         <button class="btn sm hov" data-add="now" data-i="${i}" title="Увімкнути зараз">Зараз</button>
+         <button class="btn sm hov" data-add="next" data-i="${i}" title="Зіграти наступним">Наступним</button>
+         <button class="btn sm pri" data-add="end" data-i="${i}" title="В кінець черги">У чергу</button>`,
+        esc(t.artist || "") + (t.duration ? " · " + fmt(t.duration) : "")).replace('<li class="row">', `<li class="row" data-res="${i}">`)).join("")
+        : `<li class="empty"><b>Нічого не знайдено</b>Спробуйте «виконавець — назва».</li>`;
+      markQueued();
+    } catch { $("results").innerHTML = `<li class="empty">Пошук не вдався. Перевірте інтернет.</li>`; }
+  };
+
+  // ── клавіатура ──
+  const typing = (el) => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  document.addEventListener("keydown", (e) => {
+    if (!$("ask").hidden) return;
+    const k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && (k === "k" || e.code === "KeyK")) { e.preventDefault(); go("scr-main"); $("q").focus(); $("q").select(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "," || e.code === "Comma")) { e.preventDefault(); go("scr-settings"); return; }
+    if (e.key === "Escape") {
+      if (closeMenu()) { $("moreBtn").focus(); return; }
+      if (screen === "scr-main" && closeResults()) return;
+      if (document.activeElement === $("q") && $("q").value) { $("q").value = ""; return; }
+      if (back()) e.preventDefault();
+      return;
+    }
+    if (screen !== "scr-main" || typing(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key === " " && !(document.activeElement && document.activeElement.closest("button, a, [role=slider]"))) { e.preventDefault(); $("playBtn").click(); }
+    if (e.code === "KeyL") like();
   });
 
   // ── помилки ──
@@ -862,10 +1344,18 @@
         ${e.details ? `<details><summary>Технічні подробиці</summary><pre>${esc(e.details)}</pre></details>` : ""}
       </li>`).join("") : `<li class="empty">Помилок немає. Якщо щось піде не так, воно з'явиться тут.</li>`;
   }
+  let unseenErrors = 0;
   function errorsBadge(sum) {
-    const open = !$("v-errors").hidden;
-    if (open && sum && sum.unseen) { loadErrors(true); return; }  // вкладка відкрита — показуємо одразу
-    $("en").textContent = sum && sum.unseen ? (sum.unseen > 99 ? "99+" : sum.unseen) : "";
+    if (screen === "pg-errors" && sum && sum.unseen) { loadErrors(true); unseenErrors = 0; }  // розділ відкрито — показуємо одразу
+    else unseenErrors = sum && sum.unseen ? sum.unseen : 0;
+    $("en").hidden = !unseenErrors;
+    $("en").textContent = unseenErrors > 99 ? "99+" : unseenErrors;
+    $("hintErr").textContent = unseenErrors ? `нових: ${unseenErrors}` : "збої бота, щоб надіслати розробнику";
+    setDot();
+  }
+  function setDot() {
+    const u = state && state.update;
+    $("setDot").hidden = !(unseenErrors || (u && u.available));
   }
   $("errClear").onclick = async () => {
     await api("/api/errors", { action: "clear" });
@@ -874,57 +1364,52 @@
   };
   $("errCopy").onclick = async () => {
     const text = errItems.map((e) => `[${errTime(e.at)}] ${e.source}: ${e.message}${e.count > 1 ? ` (×${e.count})` : ""}${e.details ? "\n" + e.details : ""}`).join("\n\n") || "Помилок немає";
-    try { await navigator.clipboard.writeText(text); }
-    catch {
-      const ta = document.createElement("textarea"); ta.value = text; document.body.append(ta); ta.select();
-      document.execCommand("copy"); ta.remove();
-    }
+    await copyText(text);
     toast("Скопійовано — можна вставити в повідомлення");
   };
 
-  // ── пошук ──
-  let lastResults = [];
-  $("searchForm").onsubmit = async (e) => {
-    e.preventDefault();
-    const q = $("q").value.trim();
-    if (!q) return;
-    $("results").innerHTML = `<li class="empty">Шукаю…</li>`;
-    try {
-      const { results } = await api("/api/search", { q });
-      lastResults = results;
-      $("results").innerHTML = results.length ? results.map((t, i) => trackRow(t, `
-          <button class="ib pink" data-add="end" data-i="${i}" title="В кінець черги">В чергу</button>
-          <button class="ib" data-add="next" data-i="${i}" title="Зіграти наступним">Далі</button>
-          <button class="ib" data-add="now" data-i="${i}" title="Увімкнути зараз">Зараз</button>`)).join("")
-        : `<li class="empty"><b>Нічого не знайдено</b>Спробуйте «виконавець — назва».</li>`;
-    } catch { $("results").innerHTML = `<li class="empty">Пошук не вдався. Перевірте інтернет.</li>`; }
-  };
-
-  // ── правила ──
+  // ── налаштування (усі перемикачі з data-key) ──
   let saveTimer = null, pending = {};
   async function loadSettings() {
-    const s = await api("/api/settings", null, "GET");
-    document.querySelectorAll("#rules [data-key]").forEach((el) => {
+    let s;
+    try { s = await api("/api/settings", null, "GET"); } catch { return; }
+    document.querySelectorAll("[data-key]").forEach((el) => {
       const [sec, k] = el.dataset.key.split(".");
-      let v = s[sec][k];
+      let v = (s[sec] || {})[k];
       if (el.type === "checkbox") el.checked = !!v;
       else if (Array.isArray(v)) el.value = v.join(", ");
       else el.value = el.dataset.scale ? Math.round(v / +el.dataset.scale) : (v ?? "");
     });
+    if (screen === "pg-obs") widgetPreview(true);
   }
   function queueSave(sec, k, v) {
     (pending[sec] ||= {})[k] = v;
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => { const body = pending; pending = {}; await api("/api/settings", body); toast("Збережено"); }, 500);
+    saveTimer = setTimeout(async () => { const body = pending; pending = {}; try { await api("/api/settings", body); toast("Збережено"); } catch {} }, 500);
   }
-  document.querySelectorAll("#rules [data-key]").forEach((el) => {
+  document.querySelectorAll("[data-key]").forEach((el) => {
     el.addEventListener("change", () => {
       const [sec, k] = el.dataset.key.split(".");
       let v = el.type === "checkbox" ? el.checked : el.value;
       if (el.type === "number") v = Math.max(0, +v || 0) * (+el.dataset.scale || 1);
       queueSave(sec, k, v);
+      if (el.id === "widget_pink") widgetPreview(true);
     });
   });
+
+  // ── перегляд віджета: живий лише поки відкрито розділ ──
+  let wSrc = "";
+  function widgetPreview(on) {
+    const f = $("wframe");
+    const src = on ? `/widget?demo=1${$("widget_pink").checked ? "&pink=1" : ""}` : "";
+    if (src === wSrc) return;
+    wSrc = src;
+    if (!src) { f.removeAttribute("src"); return; }
+    f.src = src;
+    requestAnimationFrame(() => { f.style.transform = `scale(${($("wprev").clientWidth || 448) / 520})`; });
+  }
+  addEventListener("resize", () => { if (wSrc) $("wframe").style.transform = `scale(${$("wprev").clientWidth / 520})`; });
+  $("widgetUrl").textContent = `${location.origin}/widget · джерело «Браузер», 520 × 160`;
 
   // ── фонові плейлисти ──
   let pls = null;
@@ -940,12 +1425,14 @@
   function renderPlaylists() {
     if (!pls) return;
     const sel = $("fbSelect");
-    sel.innerHTML = pls.items.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("") + `<option value="">Тиша</option>`;
+    sel.innerHTML = pls.items.map((x) => `<option value="${esc(x.id)}">«${esc(x.name)}»</option>`).join("") + `<option value="">тиша</option>`;
     sel.value = pls.active;
+    $("fbLabel").textContent = pls.active ? "Потім — фоновий плейлист" : "Коли черга скінчиться —";
+    $("hintPls").textContent = pls.active ? `зараз: ${plName(pls.active)}${pls.shuffle ? " · перемішувати" : ""}` : "вимкнено — коли черга порожня, тиша";
     $("plsList").innerHTML = pls.items.map((x) => `<li class="pl ${x.id === pls.active ? "on" : ""}">
         <span class="nm">${esc(x.name)}<small>${x.id === "LM" ? "з YouTube Music" : ""}</small></span>
-        ${x.id === pls.active ? '<span class="tag">обрано</span>' : `<button type="button" class="ib" data-pl-select="${esc(x.id)}">Увімкнути</button>`}
-        <button type="button" class="ib" data-pl-remove="${esc(x.id)}" title="Прибрати зі списку" aria-label="Прибрати ${esc(x.name)}">${xIcon}</button>
+        ${x.id === pls.active ? '<span class="tag">грає у фоні</span>' : `<button type="button" class="btn sm" data-pl-select="${esc(x.id)}">Увімкнути</button>`}
+        <button type="button" class="sq" data-pl-remove="${esc(x.id)}" title="Прибрати зі списку" aria-label="Прибрати ${esc(x.name)}">${xIcon}</button>
       </li>`).join("") || `<li class="empty">Додайте плейлист — він гратиме, коли черга порожня.</li>`;
     $("plShuffle").checked = !!pls.shuffle;
   }
@@ -974,7 +1461,6 @@
   loadPlaylists();
 
   // ── команди, ролі, ліміти ──
-  const xIcon = '<svg viewBox="0 0 24 24"><path d="M6.4 5L5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>';
   let acc = null, limRole = "all";
   async function loadAccess() {
     try { acc = await api("/api/access", null, "GET"); } catch { return; }
@@ -990,7 +1476,7 @@
 
   function renderAccess() {
     if (!acc) return;
-    $("cmds").innerHTML = acc.commands.map((c) => {
+    if (!document.querySelector("#cmds .name-in")) $("cmds").innerHTML = acc.commands.map((c) => {
       const all = c.roles.includes("all");
       const names = c.names.map((n, i) => `<span class="name ${i === 0 ? "main" : ""}" title="${i === 0 ? "Основна — її бот показує в підказках" : ""}">
           <button type="button" class="nm" data-edit="${c.key}" data-i="${i}" aria-label="Змінити ${esc(n)}">${esc(n)}</button>
@@ -1021,9 +1507,12 @@
       if (el.type === "checkbox") el.checked = !!v;
       else el.value = el.dataset.scale ? Math.round((v || 0) / +el.dataset.scale) : (v ?? 0);
       el.disabled = !custom;
-      el.closest(".field").classList.toggle("off", !custom);
+      el.closest(".set").classList.toggle("off", !custom);
     });
     $("max_queue").value = acc.max_queue;
+    const b = acc.limits.all, mins = Math.round((b.max_duration || 0) / 60);
+    $("hintLimits").textContent = `для всіх: ${mins ? mins + " хв" : "будь-яка довжина"}, ${b.max_per_user || "∞"} трек., пауза ${b.cooldown || 0} с · черга до ${acc.max_queue}`;
+    $("hintHelpers").textContent = acc.helpers.length ? acc.helpers.slice(0, 3).join(", ") + (acc.helpers.length > 3 ? ` і ще ${acc.helpers.length - 3}` : "") : "поки нікого — люди без модерки з окремими правами";
     renderHelpers();
     renderHelp();
   }
@@ -1057,6 +1546,7 @@
       let v = input.value.trim().toLowerCase().replace(/\s+/g, "");
       if (v && !v.startsWith("!")) v = "!" + v;
       const names = [...c.names];
+      input.remove();
       if (!commit || v === "!" || (i !== null && v === names[i])) return renderAccess();
       if (i === null) { if (v) names.push(v); }
       else if (v) names[i] = v; else names.splice(i, 1);
@@ -1065,7 +1555,7 @@
     };
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); finish(true); }
-      if (e.key === "Escape") finish(false);
+      if (e.key === "Escape") { e.stopPropagation(); finish(false); }
     });
     input.addEventListener("blur", () => finish(true));
   }
@@ -1123,12 +1613,12 @@
     if (b) saveAccess({ helpers: acc.helpers.filter((x) => x !== b.dataset.unhelper) }, `@${b.dataset.unhelper} більше не помічник`);
   });
 
-  // ── низ ──
+  // ── віджет, перезапуск, вимкнення ──
   $("copyWidget").onclick = async () => {
     const url = `${location.origin}/widget`;
-    try { await navigator.clipboard.writeText(url); toast("Скопійовано: " + url); } catch { prompt("Адреса віджета для OBS:", url); }
+    if (await copyText(url)) toast("Скопійовано: " + url); else prompt("Адреса віджета для OBS:", url);
   };
-  $("restartBtn").onclick = async () => {
+  async function restart() {
     if (!await ask("Перезапустити pipabobik?", "Музика замовкне на кілька секунд, черга збережеться.", "Перезапустити")) return;
     const from = state ? state.boot : "";
     try { await control("restart"); } catch { return; }
@@ -1136,7 +1626,10 @@
     $("offTitle").textContent = "Перезапускаю pipabobik…";
     $("offText").textContent = "Кілька секунд — і все повернеться. Черга на місці.";
     $("offline").classList.add("show");
-  };
+  }
+  $("restartBtn").onclick = restart;
+  $("quitBtn").onclick = async () => { if (await ask("Вимкнути pipabobik?", "Музика зупиниться, черга збережеться.", "Вимкнути", true)) control("shutdown"); };
+
   // ── оновлення ──
   let updLaterSha = "";
   try { updLaterSha = localStorage.getItem("pipabobik.updLater") || ""; } catch {}
@@ -1146,11 +1639,16 @@
     if (!u) return;
     const busy = u.state === "downloading" || u.state === "installing";
     const btn = $("updBtn");
-    btn.classList.toggle("has", !!u.available);
+    btn.classList.toggle("pri", !!u.available);
     btn.textContent = { checking: "Перевіряю…", downloading: "Завантажую…", installing: "Встановлюю…" }[u.state]
-      || (u.available ? "Оновити" : "Оновлення");
+      || (u.available ? "Оновити" : "Перевірити");
     btn.disabled = busy || u.state === "checking";
-    btn.title = u.available ? `Нова версія: ${u.message}` : (u.current_known ? `Установлено ${u.current} — остання версія` : "Перевірити, чи є нова версія на GitHub");
+    const ver = u.current_known ? `pipabobik ${u.current}` : "pipabobik";
+    $("updVer").textContent = ver;
+    $("updState").textContent = u.available ? `Є нова версія ${u.latest || ""}: ${u.message || ""}` : (u.current_known ? "Остання версія" : "Нові версії завантажуються з GitHub");
+    $("verLine").textContent = u.available ? `${ver} · є нова версія ${u.latest || ""}` : `${ver}${u.current_known ? " · остання версія" : ""}`;
+    $("hintUpd").textContent = u.available ? `нова версія: ${u.message || u.latest}` : "нові версії з GitHub · завжди з підтвердженням";
+    $("updBadge").hidden = !u.available;
     const bar = $("updBar");
     bar.hidden = !u.available || (u.latest === updLaterSha && !busy);
     $("updMsg").textContent = u.current_known ? (u.message || "") + (u.downloaded ? " · уже завантажено з GitHub" : "")
@@ -1159,6 +1657,7 @@
     $("updNotesWrap").hidden = (u.notes || []).length < 2;
     $("updGo").disabled = busy;
     $("updGo").textContent = busy ? btn.textContent : "Оновити";
+    setDot();
     if (u.state === "installing" && !restartFrom) {
       restartFrom = s.boot || "?";
       $("offTitle").textContent = "Оновлюю pipabobik…";
@@ -1200,8 +1699,7 @@
     } catch {}
   };
 
-  // ── вікно застосунку: поверх інших вікон і міні-плеєр (лише у вікні pipabobik, не в браузері) ──
-  $("banArtistNow").onclick = () => state && state.now && banArtist({ video_id: state.now.video_id }, mainArtist(state.now.artist));
+  // ── вікно застосунку: власна смуга, поверх інших вікон, міні-плеєр (лише у вікні pipabobik, не в браузері) ──
   $("banArtistForm").onsubmit = (e) => {
     e.preventDefault();
     const name = $("banArtistName").value.trim();
@@ -1209,16 +1707,38 @@
     banArtist({ artist: name }, name).then(() => { $("banArtistName").value = ""; });
   };
   if (window.pipabobikWindow) {
+    const win = window.pipabobikWindow;
+    document.body.classList.add("winapp");
+    $("titlebar").hidden = false;
     $("winBtns").hidden = false;
-    window.onPipabobikWindow = (w) => {
-      $("pinBtn").setAttribute("aria-pressed", w.pinned ? "true" : "false");
-      $("pinBtn").title = w.pinned ? "Поверх усіх вікон — увімкнено" : "Поверх усіх вікон";
+    const maxIcon = {
+      off: '<rect x=".5" y=".5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor"/>',
+      on: '<rect x=".5" y="2.5" width="7" height="7" rx="1.2" fill="none" stroke="currentColor"/><path d="M2.5 2.5V1.8A1.3 1.3 0 013.8.5h4.4a1.3 1.3 0 011.3 1.3v4.4a1.3 1.3 0 01-1.3 1.3H7.5" fill="none" stroke="currentColor"/>',
     };
-    $("pinBtn").onclick = () => window.pipabobikWindow("pin");
-    $("miniBtn").onclick = () => window.pipabobikWindow("mini");
+    window.onPipabobikWindow = (w) => {
+      if ("pinned" in w) {
+        $("pinBtn").setAttribute("aria-pressed", w.pinned ? "true" : "false");
+        $("pinBtn").title = w.pinned ? "Поверх усіх вікон — увімкнено" : "Поверх усіх вікон";
+      }
+      if ("maximized" in w) {
+        $("capMaxIcon").innerHTML = w.maximized ? maxIcon.on : maxIcon.off;
+        $("capMax").title = $("capMax").ariaLabel = w.maximized ? "Відновити" : "Розгорнути";
+      }
+      if ("mica" in w) document.documentElement.classList.toggle("mica", !!w.mica);
+    };
+    $("pinBtn").onclick = () => win("pin");
+    $("miniBtn").onclick = () => win("mini");
+    $("capMin").onclick = () => win("minimize");
+    $("capMax").onclick = () => win("maximize");
+    $("capClose").onclick = () => win("close");
+    // тягнути вікно за смугу; подвійний клік — розгорнути
+    $("titlebar").addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || e.target.closest(".cap")) return;
+      e.preventDefault();
+      win(e.detail === 2 ? "maximize" : "drag");
+    });
+    win("state");
   }
-
-  $("quitBtn").onclick = async () => { if (await ask("Вимкнути pipabobik?", "Музика зупиниться, черга збережеться.", "Вимкнути", true)) control("shutdown"); };
 })();
 </script>
 </body>

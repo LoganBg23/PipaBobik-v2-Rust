@@ -21,7 +21,7 @@ use pipabobik_core::system::ObsWatch;
 use pipabobik_core::uninstall::{self, ask, Answer, Buttons};
 use pipabobik_core::{paths, proc, updater};
 use tauri::webview::{NewWindowResponse, PageLoadEvent};
-use tauri::window::Color;
+use tauri::window::{Color, Effect, EffectState, EffectsBuilder};
 use tauri::{Manager, PhysicalPosition, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
@@ -290,19 +290,59 @@ fn save_prefs(p: &WinPrefs) {
     let _ = std::fs::write(prefs_path(), serde_json::to_string(p).unwrap_or_default());
 }
 
-/// Повідомляє сторінці застосунку, чи вікно закріплене поверх інших.
+/// Повідомляє сторінці застосунку стан вікна: закріплене поверх інших, розгорнуте, чи є під смугою Mica.
 fn tell_pinned(w: &WebviewWindow) {
     let pinned = load_prefs().pinned;
-    let _ = w.eval(format!("window.onPipabobikWindow && window.onPipabobikWindow({{pinned: {pinned}}})"));
+    let maximized = w.is_maximized().unwrap_or(false);
+    let mica = use_mica();
+    let _ = w.eval(format!("window.onPipabobikWindow && window.onPipabobikWindow({{pinned: {pinned}, maximized: {maximized}, mica: {mica}}})"));
+}
+
+/// Номер збірки Windows (22000+ — Windows 11).
+#[cfg(windows)]
+fn windows_build() -> u32 {
+    #[repr(C)]
+    #[allow(dead_code)]
+    struct OsVersionInfo {
+        size: u32,
+        major: u32,
+        minor: u32,
+        build: u32,
+        platform: u32,
+        csd: [u16; 128],
+    }
+    #[link(name = "ntdll")]
+    extern "system" {
+        fn RtlGetVersion(info: *mut OsVersionInfo) -> i32;
+    }
+    let mut v = OsVersionInfo { size: std::mem::size_of::<OsVersionInfo>() as u32, major: 0, minor: 0, build: 0, platform: 0, csd: [0; 128] };
+    // SAFETY: структура правильного розміру, функція лише заповнює її
+    if unsafe { RtlGetVersion(&mut v) } != 0 {
+        return 0;
+    }
+    v.build
+}
+
+/// Напівпрозора смуга з системним ефектом Mica — лише на Windows 11 (на Windows 10 його немає,
+/// і прозоре вікно показувало б робочий стіл; там смуга напівпрозора поверх фону застосунку).
+fn use_mica() -> bool {
+    #[cfg(windows)]
+    {
+        windows_build() >= 22000
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 /// Обробник посилань для обох вікон: службові команди, свої сторінки, решта — у браузер.
-fn navigation(app: tauri::AppHandle) -> impl Fn(&Url) -> bool + Send + 'static {
+fn navigation(app: tauri::AppHandle, label: &'static str) -> impl Fn(&Url) -> bool + Send + 'static {
     move |url: &Url| {
         if let Some(cmd) = bridge_cmd(url) {
             let a = app.clone();
             // окремий потік: команда виконується вже після того, як перехід скасовано
-            std::thread::spawn(move || window_cmd(&a, &cmd));
+            std::thread::spawn(move || window_cmd(&a, label, &cmd));
             return false;
         }
         if is_local(url) && !url.path().starts_with("/auth") {
@@ -313,8 +353,27 @@ fn navigation(app: tauri::AppHandle) -> impl Fn(&Url) -> bool + Send + 'static {
     }
 }
 
-fn window_cmd(app: &tauri::AppHandle, cmd: &str) {
+fn window_cmd(app: &tauri::AppHandle, label: &str, cmd: &str) {
     match cmd {
+        // власна смуга вікна замість системної
+        "minimize" => {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.minimize();
+            }
+        }
+        "maximize" => {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = if w.is_maximized().unwrap_or(false) { w.unmaximize() } else { w.maximize() };
+                std::thread::sleep(Duration::from_millis(60));
+                tell_pinned(&w);
+            }
+        }
+        "close" if label == "main" => {
+            if let Some(w) = app.get_webview_window("main") {
+                // те саме, що хрестик Windows: спитає, чи закрити
+                let _ = w.close();
+            }
+        }
         "pin" => {
             if let Some(w) = app.get_webview_window("main") {
                 let on = !load_prefs().pinned;
@@ -333,8 +392,8 @@ fn window_cmd(app: &tauri::AppHandle, cmd: &str) {
         "mini" => show_mini(app),
         "full" => show_full(app),
         "drag" => {
-            if let Some(m) = app.get_webview_window("mini") {
-                let _ = m.start_dragging();
+            if let Some(w) = app.get_webview_window(label) {
+                let _ = w.start_dragging();
             }
         }
         _ => {}
@@ -359,7 +418,7 @@ fn show_mini(app: &tauri::AppHandle) {
                 .visible(false)
                 .background_color(Color(0x2a, 0x0d, 0x22, 0xff))
                 .initialization_script(BRIDGE)
-                .on_navigation(navigation(app.clone()))
+                .on_navigation(navigation(app.clone(), "mini"))
                 .on_new_window(|url, _| {
                     open_url(url.as_str());
                     NewWindowResponse::Deny
@@ -423,6 +482,7 @@ fn run_panel() {
     std::thread::spawn(uninstall::register_if_needed);
     let closing = Arc::new(AtomicBool::new(false));
     let closing_ev = closing.clone();
+    let was_max = AtomicBool::new(false);
     let ctx = tauri::generate_context!();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -432,15 +492,24 @@ fn run_panel() {
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             let pinned = load_prefs().pinned;
-            let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("pipabobik")
                 .inner_size(480.0, 900.0)
                 .min_inner_size(380.0, 560.0)
                 .always_on_top(pinned)
-                .background_color(Color(0x1c, 0x07, 0x16, 0xff))
+                // системної рамки немає: смугу з кнопками малює сама сторінка (напівпрозору)
+                .decorations(false)
+                .shadow(true);
+            builder = if use_mica() {
+                // Windows 11: під напівпрозорою смугою видно системний Mica
+                builder.transparent(true).effects(EffectsBuilder::new().effect(Effect::Mica).state(EffectState::FollowsWindowActiveState).build())
+            } else {
+                builder.background_color(Color(0x1c, 0x07, 0x16, 0xff))
+            };
+            let win = builder
                 .initialization_script(BRIDGE)
                 // посилання назовні (YouTube, вхід у Twitch) — у звичайному браузері
-                .on_navigation(navigation(app.handle().clone()))
+                .on_navigation(navigation(app.handle().clone(), "main"))
                 .on_new_window(|url, _features| {
                     open_url(url.as_str());
                     NewWindowResponse::Deny
@@ -457,6 +526,16 @@ fn run_panel() {
             Ok(())
         })
         .on_window_event(move |window, event| {
+            if let WindowEvent::Resized(_) = event {
+                if window.label() == "main" {
+                    let max = window.is_maximized().unwrap_or(false);
+                    if max != was_max.swap(max, Ordering::SeqCst) {
+                        if let Some(w) = window.app_handle().get_webview_window("main") {
+                            tell_pinned(&w);
+                        }
+                    }
+                }
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // міні-плеєр не закривається, а повертає повне вікно
                 if window.label() == "mini" {
