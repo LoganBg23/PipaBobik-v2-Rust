@@ -23,7 +23,14 @@ use crate::track::{best_cover, now_secs, Track};
 const ORIGIN: &str = "https://music.youtube.com";
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const CLIENT_VERSION: &str = "1.20251110.03.00";
-const SEARCH_TTL: f64 = 15.0 * 60.0;
+/// Кеш на диску (data/cache): пошук і фонові плейлисти живуть до 7 днів.
+pub const CACHE_TTL: f64 = 7.0 * 86400.0;
+/// Скільки треків фонового плейлиста тримати в кеші (і завантажувати за раз).
+pub const PLAYLIST_LIMIT: usize = 100;
+/// Кеш плейлиста старший за це — оновлюється у фоні, поки грає збережений.
+const PLAYLIST_REFRESH: f64 = 6.0 * 3600.0;
+const SEARCH_LIMIT: usize = 300;
+const SEARCH_TTL: f64 = CACHE_TTL;
 const COOKIES_TTL: Duration = Duration::from_secs(6 * 3600);
 /// Фільтри пошуку YouTube Music («Пісні» / «Відео»), як у ytmusicapi.
 const PARAMS_SONGS: &str = "EgWKAQIIAWoMEA4QChADEAQQCRAF";
@@ -220,6 +227,58 @@ pub struct MusicSource {
     slots: Semaphore,
     tmp_seq: AtomicU64,
     search_cache: Mutex<HashMap<(String, bool), (f64, Vec<Track>)>>,
+    pub cache_dir: PathBuf,
+    me: std::sync::OnceLock<std::sync::Weak<MusicSource>>,
+    refreshing: Mutex<std::collections::HashSet<String>>,
+}
+
+/// Збережений плейлист: коли збережено і треки (не більше PLAYLIST_LIMIT).
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CachedPlaylist {
+    saved_at: f64,
+    tracks: Vec<Track>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CachedSearch {
+    q: String,
+    songs: bool,
+    at: f64,
+    tracks: Vec<Track>,
+}
+
+fn playlist_file(dir: &Path, pid: &str) -> PathBuf {
+    let safe: String = pid.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    dir.join("playlists").join(format!("{safe}.json"))
+}
+
+/// Плейлист із кешу, якщо йому менше 7 днів: (коли збережено, треки).
+pub fn load_cached_playlist(dir: &Path, pid: &str) -> Option<(f64, Vec<Track>)> {
+    let c: CachedPlaylist = serde_json::from_str(&std::fs::read_to_string(playlist_file(dir, pid)).ok()?).ok()?;
+    (now_secs() - c.saved_at < CACHE_TTL && !c.tracks.is_empty()).then_some((c.saved_at, c.tracks))
+}
+
+pub fn save_cached_playlist(dir: &Path, pid: &str, tracks: &[Track]) {
+    let path = playlist_file(dir, pid);
+    if let Some(d) = path.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let c = CachedPlaylist { saved_at: now_secs(), tracks: tracks.iter().take(PLAYLIST_LIMIT).cloned().collect() };
+    let tmp = path.with_extension("tmp");
+    if std::fs::write(&tmp, serde_json::to_string(&c).unwrap_or_default()).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    }
+}
+
+/// Прибирає з кешу все, що старше 7 днів.
+pub fn prune_cache(dir: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir.join("playlists")) else { return };
+    for e in rd.flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|a| a.as_secs_f64() > CACHE_TTL).unwrap_or(false);
+        if old {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
 }
 
 impl MusicSource {
@@ -235,6 +294,41 @@ impl MusicSource {
             slots: Semaphore::new(2),
             tmp_seq: AtomicU64::new(0),
             search_cache: Mutex::new(HashMap::new()),
+            cache_dir: paths::data_dir().join("cache"),
+            me: std::sync::OnceLock::new(),
+            refreshing: Mutex::new(Default::default()),
+        }
+    }
+
+    /// Посилання на себе: щоб оновлювати кеш плейлиста у фоні.
+    pub fn set_self(self: &std::sync::Arc<Self>) {
+        let _ = self.me.set(std::sync::Arc::downgrade(self));
+    }
+
+    /// Завантажує збережені пошуки (до 7 днів), щоб повторні замовлення знаходились миттєво.
+    pub fn load_search_cache(&self) {
+        prune_cache(&self.cache_dir);
+        let Ok(text) = std::fs::read_to_string(self.cache_dir.join("search.json")) else { return };
+        let items: Vec<CachedSearch> = serde_json::from_str(&text).unwrap_or_default();
+        let mut c = self.search_cache.lock().unwrap();
+        for it in items.into_iter().filter(|i| now_secs() - i.at < SEARCH_TTL) {
+            c.insert((it.q, it.songs), (it.at, it.tracks));
+        }
+    }
+
+    fn save_search_cache(&self) {
+        let items: Vec<CachedSearch> = {
+            let c = self.search_cache.lock().unwrap();
+            let mut v: Vec<CachedSearch> = c.iter().map(|((q, songs), (at, tracks))| CachedSearch { q: q.clone(), songs: *songs, at: *at, tracks: tracks.clone() }).collect();
+            v.sort_by(|a, b| b.at.total_cmp(&a.at));
+            v.truncate(SEARCH_LIMIT);
+            v
+        };
+        let _ = std::fs::create_dir_all(&self.cache_dir);
+        let path = self.cache_dir.join("search.json");
+        let tmp = path.with_extension("tmp");
+        if std::fs::write(&tmp, serde_json::to_string(&items).unwrap_or_default()).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
         }
     }
 
@@ -485,11 +579,17 @@ impl MusicSource {
         }
         let found = self.search_uncached(query, only_songs, 8).await;
         if !found.is_empty() {
-            let mut c = self.search_cache.lock().unwrap();
-            if c.len() > 300 {
-                c.clear();
+            {
+                let mut c = self.search_cache.lock().unwrap();
+                if c.len() >= SEARCH_LIMIT {
+                    // найстаріший пошук іде з кешу
+                    if let Some(oldest) = c.iter().min_by(|a, b| a.1 .0.total_cmp(&b.1 .0)).map(|(k, _)| k.clone()) {
+                        c.remove(&oldest);
+                    }
+                }
+                c.insert(key, (now_secs(), found.clone()));
             }
-            c.insert(key, (now_secs(), found.clone()));
+            self.save_search_cache();
         }
         found
     }
@@ -548,15 +648,47 @@ impl MusicSource {
             return vec![];
         }
         let pid = PLAYLIST_RE.captures(playlist).map(|c| c[1].to_string()).unwrap_or_else(|| playlist.trim().to_string());
-        let url = format!("https://music.youtube.com/playlist?list={pid}");
-        let Some(v) = self.ytdlp_json(&["--flat-playlist", "-J", &url], 120).await else { return vec![] };
-        let mut out = flat_entries(&v, "fallback");
+        // спершу кеш: музика починає грати одразу, без очікування на YouTube
+        let mut out = match load_cached_playlist(&self.cache_dir, &pid) {
+            Some((saved_at, tracks)) => {
+                if now_secs() - saved_at > PLAYLIST_REFRESH {
+                    self.refresh_in_background(&pid);
+                }
+                tracing::info!("Фоновий плейлист із кешу: {} треків", tracks.len());
+                tracks
+            }
+            None => self.fetch_playlist(&pid).await,
+        };
         if shuffle {
             use rand::seq::SliceRandom;
             out.shuffle(&mut rand::rng());
         }
-        tracing::info!("Фоновий плейлист: {} треків", out.len());
         out
+    }
+
+    /// Перші PLAYLIST_LIMIT треків плейлиста з YouTube Music; результат іде в кеш.
+    async fn fetch_playlist(&self, pid: &str) -> Vec<Track> {
+        let url = format!("https://music.youtube.com/playlist?list={pid}");
+        let end = PLAYLIST_LIMIT.to_string();
+        let Some(v) = self.ytdlp_json(&["--flat-playlist", "-J", "--playlist-end", &end, &url], 120).await else { return vec![] };
+        let out: Vec<Track> = flat_entries(&v, "fallback").into_iter().take(PLAYLIST_LIMIT).collect();
+        if !out.is_empty() {
+            save_cached_playlist(&self.cache_dir, pid, &out);
+        }
+        tracing::info!("Фоновий плейлист: {} треків (збережено в кеш на 7 днів)", out.len());
+        out
+    }
+
+    fn refresh_in_background(&self, pid: &str) {
+        let Some(me) = self.me.get().and_then(|w| w.upgrade()) else { return };
+        if !self.refreshing.lock().unwrap().insert(pid.to_string()) {
+            return; // уже оновлюється
+        }
+        let pid = pid.to_string();
+        tokio::spawn(async move {
+            me.fetch_playlist(&pid).await;
+            me.refreshing.lock().unwrap().remove(&pid);
+        });
     }
 
     pub async fn playlist_title(&self, playlist_id: &str) -> Option<String> {
@@ -695,5 +827,32 @@ mod tests {
         assert_eq!(t.len(), 1);
         assert_eq!(t[0].artist, "A");
         assert_eq!(t[0].source, "fallback");
+    }
+
+    #[test]
+    fn playlist_cache_lives_seven_days_and_keeps_100() {
+        let dir = tempfile::tempdir().unwrap();
+        let tracks: Vec<Track> = (0..150).map(|i| Track::new(&format!("id{i:09}"), &format!("T{i}"))).collect();
+        save_cached_playlist(dir.path(), "LM", &tracks);
+        let (_, got) = load_cached_playlist(dir.path(), "LM").unwrap();
+        assert_eq!(got.len(), PLAYLIST_LIMIT);
+        // кеш старший за 7 днів не використовується
+        let path = playlist_file(dir.path(), "LM");
+        let mut c: CachedPlaylist = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        c.saved_at -= CACHE_TTL + 10.0;
+        std::fs::write(&path, serde_json::to_string(&c).unwrap()).unwrap();
+        assert!(load_cached_playlist(dir.path(), "LM").is_none());
+        assert!(playlist_file(dir.path(), "../../x").ends_with("x.json"));
+    }
+
+    #[test]
+    fn search_cache_survives_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let m = MusicSource { cache_dir: dir.path().to_path_buf(), ..MusicSource::new("", "", reqwest::Client::new()) };
+        m.search_cache.lock().unwrap().insert(("обійми".into(), true), (now_secs(), vec![Track::new("abcdefghijk", "Обійми")]));
+        m.save_search_cache();
+        let m2 = MusicSource { cache_dir: dir.path().to_path_buf(), ..MusicSource::new("", "", reqwest::Client::new()) };
+        m2.load_search_cache();
+        assert_eq!(m2.search_cache.lock().unwrap().len(), 1);
     }
 }

@@ -140,6 +140,8 @@ impl Bot {
             http.clone(),
         ));
         let music = Arc::new(MusicSource::new(&cfg.str("google", "cookies_from_browser"), &cfg.str("google", "cookies_file"), http.clone()));
+        music.set_self();
+        music.load_search_cache(); // пошуки за останні 7 днів — без повторного запиту до YouTube
         let player = Arc::new(Player::new(
             &cfg.str("player", "mpv_path"),
             cfg.int("player", "volume"),

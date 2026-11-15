@@ -276,6 +276,13 @@
   .foot-r { display: flex; gap: 6px; }
   .round:disabled { opacity: .45; cursor: default; }
 
+  .ask { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(10, 2, 8, .62); }
+  .ask[hidden] { display: none; }
+  .ask .box { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 18px; box-shadow: 0 18px 50px rgba(0, 0, 0, .5); }
+  .ask h2 { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+  .ask p { color: var(--muted); white-space: pre-line; font-size: 13.5px; }
+  .ask .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .ask .btns .pri.danger { background: #e5476b; }
   .toast { position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 20px); opacity: 0; padding: 10px 16px; border-radius: 999px;
     background: var(--pearl); color: var(--night); font-weight: 800; transition: .25s; pointer-events: none; z-index: 10; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -466,6 +473,13 @@
 </footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="ask" id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="askTitle">
+  <div class="box">
+    <h2 id="askTitle"></h2>
+    <p id="askText"></p>
+    <div class="btns"><button class="ghost" id="askNo">Скасувати</button><button class="pri" id="askYes"></button></div>
+  </div>
+</div>
 <div class="offline" id="offline"><div><h2 id="offTitle">Бот не запущено</h2><p class="muted" id="offText">Він стартує разом з OBS. Якщо OBS уже відкрито — зачекайте кілька секунд.</p></div></div>
 
 <script>
@@ -525,10 +539,28 @@
     return data;
   }
   const control = (action, extra = {}) => api("/api/control", { action, ...extra });
+  // власне вікно підтвердження: у вікні застосунку системні confirm() можуть не показуватися
+  function ask(title, text, yes = "Так", danger = false) {
+    return new Promise((done) => {
+      const box = $("ask"), prev = document.activeElement;
+      $("askTitle").textContent = title;
+      $("askText").textContent = text || "";
+      $("askYes").textContent = yes;
+      $("askYes").classList.toggle("danger", danger);
+      box.hidden = false;
+      $("askNo").focus();  // Enter випадково не підтвердить
+      const end = (v) => { box.hidden = true; document.removeEventListener("keydown", key, true); $("askYes").onclick = $("askNo").onclick = box.onclick = null; if (prev && prev.focus) prev.focus(); done(v); };
+      const key = (e) => { if (e.key === "Escape") { e.preventDefault(); end(false); } };
+      document.addEventListener("keydown", key, true);
+      $("askYes").onclick = () => end(true);
+      $("askNo").onclick = () => end(false);
+      box.onclick = (e) => { if (e.target === box) end(false); };
+    });
+  }
   // головний виконавець: «A feat. B», «A, B», «A & B» → A
   const mainArtist = (a) => String(a || "").split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\sx\s)\s*/i)[0].trim();
   async function banArtist(extra, name) {
-    if (!confirm(`Заборонити виконавця «${name}»?\n\nУсі його треки (і спільні) зникнуть з черги й більше не гратимуть — ні з чату, ні у фоні. Розбанити можна у вкладці «Історія».`)) return;
+    if (!await ask(`Заборонити виконавця «${name}»?`, "Усі його треки (і спільні) зникнуть з черги й більше не гратимуть — ні з чату, ні у фоні. Розбанити можна у вкладці «Історія».", "Заборонити", true)) return;
     try {
       const r = await control("ban_artist", extra);
       toast(`Виконавця ${r.banned_artist || name} заборонено${r.removed ? ` · з черги прибрано: ${r.removed}` : ""}`);
@@ -763,7 +795,7 @@
   $("vol").oninput = (e) => { volDrag = true; $("volv").textContent = e.target.value; };
   $("vol").onchange = (e) => { volDrag = false; control("volume", { value: +e.target.value }); };
   $("onair").onchange = (e) => control(e.target.checked ? "on" : "off").then(() => toast(e.target.checked ? "Музику увімкнено" : "Музику вимкнено"));
-  $("clearBtn").onclick = () => { if (confirm("Очистити всю чергу?")) control("clear").then(() => toast("Чергу очищено")); };
+  $("clearBtn").onclick = async () => { if (await ask("Очистити всю чергу?", "Усі замовлені треки зникнуть з черги.", "Очистити", true)) control("clear").then(() => toast("Чергу очищено")); };
 
   document.body.addEventListener("click", async (e) => {
     const q = e.target.closest("[data-q]");
@@ -902,11 +934,11 @@
     $("plShuffle").checked = !!pls.shuffle;
   }
   $("fbSelect").onchange = (e) => { const id = e.target.value; plAction({ action: "select", id }, () => id ? `Фон: ${plName(id)}` : "Коли черга порожня — тиша"); };
-  $("plsList").addEventListener("click", (e) => {
+  $("plsList").addEventListener("click", async (e) => {
     const s = e.target.closest("[data-pl-select]");
     if (s) return plAction({ action: "select", id: s.dataset.plSelect }, () => `Фон: ${plName(s.dataset.plSelect)}`);
     const r = e.target.closest("[data-pl-remove]");
-    if (r && confirm(`Прибрати «${plName(r.dataset.plRemove)}» зі списку?`)) plAction({ action: "remove", id: r.dataset.plRemove }, "Прибрано");
+    if (r && await ask(`Прибрати «${plName(r.dataset.plRemove)}» зі списку?`, "Сам плейлист у YouTube Music не зміниться.", "Прибрати")) plAction({ action: "remove", id: r.dataset.plRemove }, "Прибрано");
   });
   $("plForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -1065,7 +1097,7 @@
     try { await navigator.clipboard.writeText(url); toast("Скопійовано: " + url); } catch { prompt("Адреса віджета для OBS:", url); }
   };
   $("restartBtn").onclick = async () => {
-    if (!confirm("Перезапустити pipabobik? Музика замовкне на кілька секунд, черга збережеться.")) return;
+    if (!await ask("Перезапустити pipabobik?", "Музика замовкне на кілька секунд, черга збережеться.", "Перезапустити")) return;
     const from = state ? state.boot : "";
     try { await control("restart"); } catch { return; }
     restartFrom = from || "?";
@@ -1115,7 +1147,10 @@
       : s.obs_restart
         ? "pipabobik завантажить нову версію з GitHub, закриє OBS і відкриє його знову (до хвилини). Черга й налаштування збережуться."
         : "pipabobik завантажить нову версію з GitHub і перезапуститься. Черга й налаштування збережуться.";
-    if (!confirm(`Оновити pipabobik?\n\n${how}`)) return;
+    const u = s.update || {};
+    const ver = u.latest ? ` до версії ${u.latest}` : "";
+    const what = u.message ? `Нове: ${u.message}\n\n` : "";
+    if (!await ask(`Оновити pipabobik${ver}?`, what + how, "Оновити")) return;
     try { await api("/api/update", { action: "install" }); } catch {}
   }
   $("updGo").onclick = startUpdate;
@@ -1151,7 +1186,7 @@
     $("miniBtn").onclick = () => window.pipabobikWindow("mini");
   }
 
-  $("quitBtn").onclick = () => { if (confirm("Вимкнути pipabobik? Музика зупиниться, черга збережеться.")) control("shutdown"); };
+  $("quitBtn").onclick = async () => { if (await ask("Вимкнути pipabobik?", "Музика зупиниться, черга збережеться.", "Вимкнути", true)) control("shutdown"); };
 })();
 </script>
 </body>
