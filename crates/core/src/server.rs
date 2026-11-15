@@ -28,6 +28,14 @@ static NICK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z0-9_]{1,25}$").unwr
 
 const APP_HTML: &str = include_str!("../../../web/app.html");
 const WIDGET_HTML: &str = include_str!("../../../web/widget.html");
+/// Попередній віджет — для відкату: /widget/classic
+const WIDGET_CLASSIC_HTML: &str = include_str!("../../../web/legacy/widget-classic.html");
+/// Fixel (MacPaw, SIL OFL) — шрифт віджета, вбудований у бота
+const FONTS: &[(&str, &[u8])] = &[
+    ("FixelDisplay-Bold.woff2", include_bytes!("../../../web/static/fonts/FixelDisplay-Bold.woff2")),
+    ("FixelText-Medium.woff2", include_bytes!("../../../web/static/fonts/FixelText-Medium.woff2")),
+    ("FixelText-SemiBold.woff2", include_bytes!("../../../web/static/fonts/FixelText-SemiBold.woff2")),
+];
 const PANEL_HTML: &str = include_str!("../../../web/panel.html");
 const SETUP_HTML: &str = include_str!("../../../web/setup.html");
 const MINI_HTML: &str = include_str!("../../../web/mini.html");
@@ -93,6 +101,9 @@ pub fn router(bot: Arc<Bot>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/widget", get(|| async { page(WIDGET_HTML) }))
+        .route("/widget/classic", get(|| async { page(WIDGET_CLASSIC_HTML) }))
+        .route("/static/fonts/{name}", get(font))
+        .route("/cover", get(cover))
         .route("/panel", get(|| async { page(PANEL_HTML) }))
         .route("/app", get(app_page))
         .route("/setup", get(|| async { page(SETUP_HTML) }))
@@ -115,6 +126,60 @@ pub fn router(bot: Arc<Bot>) -> Router {
         .route("/auth", get(auth_start))
         .route("/auth/callback", get(auth_callback))
         .with_state(bot)
+}
+
+// ── шрифти й обкладинки для віджета ──
+async fn font(axum::extract::Path(name): axum::extract::Path<String>) -> Response {
+    match FONTS.iter().find(|(n, _)| *n == name) {
+        Some((_, data)) => ([(header::CONTENT_TYPE, "font/woff2"), (header::CACHE_CONTROL, "public, max-age=31536000")], *data).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Хости, з яких беремо обкладинки (YouTube Music / YouTube).
+pub fn cover_allowed(url: &str) -> bool {
+    let Ok(u) = reqwest::Url::parse(url) else { return false };
+    let host = u.host_str().unwrap_or("");
+    u.scheme() == "https" && ["ytimg.com", "googleusercontent.com", "ggpht.com"].iter().any(|d| host == *d || host.ends_with(&format!(".{d}")))
+}
+
+type CoverCache = std::sync::Mutex<std::collections::VecDeque<(String, String, Bytes)>>;
+static COVERS: Lazy<CoverCache> = Lazy::new(Default::default);
+
+#[derive(serde::Deserialize)]
+struct CoverQ {
+    u: String,
+}
+
+/// Обкладинка через бота: віджет може прочитати з неї колір (браузер не дає читати картинки з чужих сайтів).
+/// Лише в пам'яті, останні 40 штук; на диск нічого не пишеться.
+async fn cover(State(bot): S, Query(q): Query<CoverQ>) -> Response {
+    if !cover_allowed(&q.u) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let hit = COVERS.lock().unwrap().iter().find(|(u, ..)| *u == q.u).map(|(_, ct, b)| (ct.clone(), b.clone()));
+    let (ct, data) = match hit {
+        Some(h) => h,
+        None => {
+            let r = match bot.http.get(&q.u).timeout(Duration::from_secs(10)).send().await {
+                Ok(r) if r.status().is_success() => r,
+                Ok(r) => return StatusCode::from_u16(r.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY).into_response(),
+                Err(_) => return StatusCode::BAD_GATEWAY.into_response(),
+            };
+            let ct = r.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("image/jpeg").to_string();
+            if !ct.starts_with("image/") || r.content_length().unwrap_or(0) > 3_000_000 {
+                return StatusCode::BAD_GATEWAY.into_response();
+            }
+            let Ok(data) = r.bytes().await else { return StatusCode::BAD_GATEWAY.into_response() };
+            let mut c = COVERS.lock().unwrap();
+            c.push_back((q.u.clone(), ct.clone(), data.clone()));
+            while c.len() > 40 {
+                c.pop_front();
+            }
+            (ct, data)
+        }
+    };
+    ([(header::CONTENT_TYPE, ct), (header::CACHE_CONTROL, "public, max-age=86400".to_string())], data).into_response()
 }
 
 // ── стан ──

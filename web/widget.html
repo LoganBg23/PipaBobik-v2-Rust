@@ -4,186 +4,116 @@
 <meta charset="utf-8">
 <title>pipabobik — зараз грає</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
-<style>
-  /*
-    Параметри адреси:
+<!--
+  Віджет «зараз грає» для OBS (Джерело → Браузер, 520 × 160).
+  Параметри адреси:
       ?idle=hide   — ховати віджет, коли нічого не грає (за замовчуванням)
       ?idle=hint   — показувати підказку «замов трек»
-      ?cmd=!трек   — команда в підказці
+      ?cmd=!sr     — яку команду показувати в підказці
       ?scale=1.25  — масштаб
-      ?demo=1      — демо-трек (для налаштування в OBS без бота)
-  */
-  :root {
-    --hot: #ff3d9a;        /* гарячий рожевий — головний акцент */
-    --blush: #ffb3d6;      /* ніжний рожевий */
-    --pearl: #fff0f7;      /* перламутр — основа картки */
-    --plum: #3a0d2c;       /* темна слива — текст і платівка */
-    --lilac: #c58bff;      /* бузковий — відблиск */
-    --scale: 1;
-  }
+      ?demo=1      — демо-трек (для налаштування в OBS без бота); ?demo=cycle — демо змінює треки
+-->
+<style>
+  /* Fixel — український шрифт від MacPaw (SIL OFL) */
+  @font-face { font-family: "Fixel Display"; font-weight: 700; font-display: block; src: url("/static/fonts/FixelDisplay-Bold.woff2") format("woff2"); }
+  @font-face { font-family: "Fixel Text"; font-weight: 500; font-display: block; src: url("/static/fonts/FixelText-Medium.woff2") format("woff2"); }
+  @font-face { font-family: "Fixel Text"; font-weight: 600; font-display: block; src: url("/static/fonts/FixelText-SemiBold.woff2") format("woff2"); }
+
+  /* кольори з обкладинки плавно перетікають (лише кілька маленьких елементів, без перемальовування всього віджета) */
+  @property --accent { syntax: "<color>"; inherits: true; initial-value: #ffd6ea; }
+  @property --accent-soft { syntax: "<color>"; inherits: true; initial-value: rgba(255, 214, 234, .2); }
+
+  :root { --scale: 1; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: transparent; overflow: hidden; }
-  body { font-family: "Manrope", system-ui, sans-serif; color: var(--plum); padding: 28px 22px; }
+  body { font-family: "Fixel Text", "Segoe UI", system-ui, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
 
   .stage {
-    width: 600px;
-    transform: scale(var(--scale));
-    transform-origin: top left;
-    transition: opacity .5s ease, transform .5s ease;
+    position: absolute; left: 14px; top: 14px; transform-origin: 0 0;
+    transform: scale(var(--scale)); opacity: 1;
+    transition: opacity .5s ease, transform .5s cubic-bezier(.2, .8, .2, 1);
   }
-  .stage.hidden { opacity: 0; transform: scale(var(--scale)) translateY(14px); }
+  .stage.hidden { opacity: 0; transform: scale(var(--scale)) translateY(10px); }
   .stage.gone { visibility: hidden; }
-  /* поки віджет схований — анімації стоять і не вантажать OBS */
-  .stage.hidden .grooves, .stage.hidden .title.scroll { animation-play-state: paused; }
 
-  /* ── картка ── */
   .card {
-    position: relative;
-    contain: layout style;
-    display: grid;
-    grid-template-columns: 218px 1fr;
-    align-items: center;
-    height: 148px;
-    padding: 0 26px 0 18px;
-    border-radius: 34px 34px 34px 10px;
-    background:
-      radial-gradient(120% 140% at 0% 0%, #ffffff 0%, transparent 46%),
-      radial-gradient(90% 120% at 100% 100%, #ffc7e3 0%, transparent 60%),
-      linear-gradient(118deg, var(--pearl) 0%, #ffd9ec 52%, #ffc1df 100%);
-    border: 2px solid rgba(255, 255, 255, .85);
-    box-shadow:
-      0 18px 40px -16px rgba(255, 61, 154, .55),
-      0 2px 0 rgba(255, 255, 255, .9) inset,
-      0 -10px 24px -14px rgba(255, 61, 154, .35) inset;
+    position: relative; width: 470px; height: 112px; padding: 14px 18px 14px 14px;
+    display: grid; grid-template-columns: 84px 1fr; gap: 16px; align-items: center;
+    border-radius: 22px; overflow: hidden; isolation: isolate;
+    border: 1px solid rgba(255, 255, 255, .09);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
+    transition: --accent 1.1s ease, --accent-soft 1.1s ease;
   }
-  /* зерно — щоб градієнт не був «пластиковим» */
-  .card::after {
-    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-    opacity: .10;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .9  0 0 0 0 .3  0 0 0 0 .6  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  }
+  /* напівпрозорий фон у кольорах обкладинки: два шари, новий плавно проявляється поверх старого */
+  .tint { position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity 1.1s ease; will-change: opacity; }
+  .tint.on { opacity: 1; }
 
-  /* ── конверт + платівка ── */
-  .deck { position: relative; width: 200px; height: 118px; }
-  .sleeve {
-    position: absolute; left: 0; top: 0; z-index: 2;
-    width: 118px; height: 118px; border-radius: 16px;
-    background: var(--blush) center / cover no-repeat;
-    box-shadow: 0 10px 22px -10px rgba(58, 13, 44, .55), 0 0 0 2px #fff;
-  }
-  .vinyl {
-    position: absolute; z-index: 1; top: 2px; left: 84px;
-    width: 114px; height: 114px; border-radius: 50%;
-    transition: left .7s cubic-bezier(.65, 0, .35, 1);
-  }
-  .deck.swap .vinyl { left: 6px; }
-  /* у треку немає обкладинки — показуємо лише платівку */
-  .deck.nocover { width: 118px; }
-  .card.nocover { grid-template-columns: 136px 1fr; }
-  .deck.nocover .sleeve { display: none; }
-  .deck.nocover .vinyl { left: 2px; }
-  .grooves {
-    position: absolute; inset: 0; border-radius: 50%;
-    background:
-      radial-gradient(circle, transparent 0 31%, rgba(255,255,255,.06) 31.5% 32.5%, transparent 33%),
-      repeating-radial-gradient(circle, #2a0920 0 1.2px, #43102f 1.6px 2.6px);
-    box-shadow: 0 6px 16px -6px rgba(58, 13, 44, .7);
-    animation: spin 2.6s linear infinite;
-    will-change: transform; /* обертання на відеокарті, без перемальовування */
-  }
-  .label {
-    position: absolute; inset: 31%; border-radius: 50%;
-    background: var(--hot) center / cover no-repeat;
-    box-shadow: 0 0 0 2px #2a0920;
-  }
-  .label::after { /* отвір */
-    content: ""; position: absolute; inset: 44%; border-radius: 50%; background: #ffd9ec;
-  }
-  /* відблиск світла не крутиться разом з платівкою — як у житті */
-  .sheen {
-    position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
-    background: conic-gradient(from 30deg, transparent 0 10%, rgba(255,255,255,.22) 14%, transparent 20% 52%, rgba(197,139,255,.28) 58%, transparent 64%);
-    mix-blend-mode: screen;
-  }
-  .paused .grooves { animation-play-state: paused; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .cover { position: relative; width: 84px; height: 84px; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); background: rgba(255, 255, 255, .08); }
+  .cover .img { position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0; transform: scale(1.06); transition: opacity .55s ease, transform .55s cubic-bezier(.2, .8, .2, 1); }
+  .cover .img.on { opacity: 1; transform: none; }
+  .cover .note { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(135deg, #ff4fa3, #b78cff); opacity: 0; transition: opacity .55s ease; }
+  .cover .note svg { width: 38px; height: 38px; fill: rgba(255, 255, 255, .92); }
+  .card.nocover .cover .note { opacity: 1; }
 
-  /* ── текст ── */
-  .meta { min-width: 0; display: grid; gap: 6px; }
-  .title-wrap { overflow: hidden; white-space: nowrap; mask-image: linear-gradient(90deg, #000 88%, transparent); }
-  .title-wrap.fits { mask-image: none; }
-  .title {
-    display: inline-block;
-    font-family: "Unbounded", "Manrope", sans-serif;
-    font-weight: 800; font-size: 23px; line-height: 1.15; letter-spacing: -.01em;
-    color: var(--plum);
-  }
-  .title.scroll { animation: marquee var(--dur, 12s) linear infinite; padding-right: 60px; will-change: transform; }
-  @keyframes marquee { 0%, 12% { transform: translateX(0); } 88%, 100% { transform: translateX(var(--shift)); } }
-  .artist {
-    font-weight: 700; font-size: 15px; color: #8a2f68;
+  .meta { min-width: 0; display: grid; gap: 3px; }
+  .titleWrap { overflow: hidden; white-space: nowrap; }
+  .titleWrap:not(.fits) { -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .title { display: inline-block; font-family: "Fixel Display", "Segoe UI", system-ui, sans-serif; font-weight: 700; font-size: 19px; line-height: 1.2; letter-spacing: .005em; }
+  /* довга назва повільно прокручується (лише transform — відеокарта, процесор не навантажується) */
+  .title.scroll { animation: marquee var(--dur, 12s) ease-in-out infinite; }
+  @keyframes marquee { 0%, 18% { transform: translateX(0); } 50%, 68% { transform: translateX(var(--shift)); } 100% { transform: translateX(0); } }
+
+  .sub { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; font-weight: 500; line-height: 1.25; }
+  .artist { color: rgba(255, 255, 255, .72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .by {
+    flex: none; display: inline-flex; align-items: center; gap: 4px; max-width: 170px;
+    padding: 2px 8px 2px 6px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .progress { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-top: 6px; }
-  .time { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; color: #a0457d; }
-  .bar { height: 6px; border-radius: 6px; background: rgba(58, 13, 44, .12); overflow: hidden; }
-  /* Прогрес рухається через transform раз на секунду (≈1 px): без анімації ширини,
-     яка змушувала OBS перемальовувати віджет 60 разів на секунду. Вигляд той самий. */
-  .fill {
-    height: 100%; width: 100%;
-    background: linear-gradient(90deg, var(--hot), #ff7ab9 70%, var(--lilac));
-    transform: scaleX(0); transform-origin: 0 50%;
-    /* плавно, але через transform: це робить відеокарта, без перерахунку сторінки */
-    transition: transform 1s linear;
-  }
-  .fill.jump { transition: none; }
+  .by svg { flex: none; width: 12px; height: 12px; fill: currentColor; }
+  .by[hidden] { display: none; }
 
-  /* ── наліпка із замовником ── */
-  .sticker {
-    position: absolute; right: 18px; top: -16px;
-    padding: 6px 13px 7px; border-radius: 999px;
-    background: var(--hot); color: #fff;
-    font-weight: 800; font-size: 13px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis;
-    transform: rotate(3deg);
-    box-shadow: 0 6px 14px -6px rgba(255, 61, 154, .9), 0 0 0 2px #fff;
-    transition: opacity .3s;
-  }
-  .sticker.plain { background: var(--plum); box-shadow: 0 6px 14px -6px rgba(58,13,44,.8), 0 0 0 2px #fff; }
-  .sticker:empty { opacity: 0; }
+  .progress { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-top: 7px; }
+  .time { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .78); font-variant-numeric: tabular-nums; min-width: 30px; }
+  .time:last-child { text-align: right; }
+  .bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .2); overflow: hidden; }
+  .fill { height: 100%; width: 100%; border-radius: 3px; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); transition: transform 1s linear, opacity .3s; }
+  .fill.jump { transition: opacity .3s; }
+  .card.paused .fill { opacity: .55; }
 
-  /* підказка, коли тиша */
-  .hint .deck .sleeve { background: linear-gradient(135deg, var(--hot), var(--lilac)); }
-  .hint .time, .hint .bar { visibility: hidden; }
+  /* підказка «замов трек» */
+  .card.hint .progress { visibility: hidden; }
+  .card.hint .cover .note { opacity: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    .grooves, .title.scroll { animation: none; }
-    .vinyl { transition: none; }
+    .stage, .tint, .cover .img, .fill { transition: none !important; }
+    .title.scroll { animation: none; }
   }
 </style>
 </head>
 <body>
-<div class="stage hidden" id="stage">
+<div class="stage hidden gone" id="stage">
   <div class="card" id="card">
-    <div class="deck" id="deck">
-      <div class="vinyl">
-        <div class="grooves"><div class="label" id="label"></div></div>
-        <div class="sheen"></div>
-      </div>
-      <div class="sleeve" id="sleeve"></div>
+    <div class="tint" id="tintA"></div>
+    <div class="tint" id="tintB"></div>
+    <div class="cover">
+      <div class="img" id="imgA"></div>
+      <div class="img" id="imgB"></div>
+      <div class="note"><svg viewBox="0 0 24 24"><path d="M9 18.5a3 3 0 11-2-2.83V5l12-2v12.5a3 3 0 11-2-2.83V7.1L9 8.4z"/></svg></div>
     </div>
     <div class="meta">
-      <div class="title-wrap" id="titleWrap"><span class="title" id="title"></span></div>
-      <div class="artist" id="artist"></div>
+      <div class="titleWrap fits" id="titleWrap"><span class="title" id="title"></span></div>
+      <div class="sub">
+        <span class="artist" id="artist"></span>
+        <span class="by" id="by" hidden><svg viewBox="0 0 24 24"><path d="M12 3a8 8 0 00-8 8v6a3 3 0 003 3h1v-7H6v-2a6 6 0 0112 0v2h-2v7h1a3 3 0 003-3v-6a8 8 0 00-8-8z"/></svg><span id="byName"></span></span>
+      </div>
       <div class="progress">
         <span class="time" id="cur">0:00</span>
         <div class="bar"><div class="fill" id="fill"></div></div>
         <span class="time" id="dur">0:00</span>
       </div>
     </div>
-    <div class="sticker" id="sticker"></div>
   </div>
 </div>
 
@@ -195,59 +125,117 @@
   document.documentElement.style.setProperty("--scale", qs.get("scale") || 1);
 
   const $ = (id) => document.getElementById(id);
-  const stage = $("stage"), card = $("card"), deck = $("deck");
+  const stage = $("stage"), card = $("card");
   let state = null, receivedAt = 0, currentId = null;
-
   const fmt = (s) => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
-  function fitTitle() {
-    const wrap = $("titleWrap"), t = $("title");
-    t.classList.remove("scroll");
-    t.style.removeProperty("--shift");
-    const overflow = t.scrollWidth - wrap.clientWidth;
-    wrap.classList.toggle("fits", overflow <= 0);
-    if (overflow > 0) {
-      t.style.setProperty("--shift", `-${overflow + 24}px`);
-      t.style.setProperty("--dur", `${Math.max(8, overflow / 18 + 6)}s`);
-      t.classList.add("scroll");
-    }
+  // ── кольори з обкладинки ──
+  // Обкладинка зменшується до 24×24 і рахується один раз на трек: це мілісекунда роботи.
+  const PINK = { h: 330, s: 0.7, l: 0.6 };
+  function rgb2hsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (max === min) return { h: 0, s: 0, l };
+    const d = max - min, s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: h * 60, s, l };
+  }
+  function dominant(img) {
+    try {
+      const c = document.createElement("canvas");
+      c.width = c.height = 24;
+      const x = c.getContext("2d", { willReadFrequently: true });
+      x.drawImage(img, 0, 0, 24, 24);
+      const px = x.getImageData(0, 0, 24, 24).data;
+      // кошики за відтінком; яскраві насичені кольори важать більше, ніж майже чорні, білі й сірі
+      const bins = Array.from({ length: 18 }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+      let grey = { w: 0, l: 0 };
+      for (let i = 0; i < px.length; i += 4) {
+        const { h, s, l } = rgb2hsl(px[i], px[i + 1], px[i + 2]);
+        const w = s * (1 - Math.abs(l - 0.5) * 1.6);
+        grey.w += 1; grey.l += l;
+        if (w <= 0.05) continue;
+        const bn = bins[Math.floor(h / 20) % 18];
+        bn.w += w; bn.r += px[i] * w; bn.g += px[i + 1] * w; bn.b += px[i + 2] * w;
+      }
+      const best = bins.reduce((a, b) => (b.w > a.w ? b : a));
+      if (best.w < 8) return { h: 0, s: 0, l: grey.l / grey.w };  // чорно-біла обкладинка
+      return rgb2hsl(best.r / best.w, best.g / best.w, best.b / best.w);
+    } catch { return null; }  // обкладинку з іншого сайту не можна прочитати — лишаємо колір як був
+  }
+  const hsla = (h, s, l, a = 1) => `hsla(${h.toFixed(0)}, ${(s * 100).toFixed(0)}%, ${(l * 100).toFixed(0)}%, ${a})`;
+  let tintOn = $("tintA");
+  function paint(c) {
+    const { h } = c;
+    const s = c.s < 0.08 ? 0 : Math.min(1, c.s);
+    // темний напівпрозорий фон того ж відтінку + м'яке сяйво від обкладинки
+    const bg = `radial-gradient(190px 150px at 56px 50%, ${hsla(h, Math.min(s, 0.9), 0.45, 0.62)}, transparent 72%),
+                linear-gradient(100deg, ${hsla(h, Math.min(s, 0.75), 0.22, 0.82)}, ${hsla(h, Math.min(s, 0.6), 0.14, 0.78)})`;
+    const next = tintOn === $("tintA") ? $("tintB") : $("tintA");
+    next.style.background = bg;
+    next.classList.add("on");
+    tintOn.classList.remove("on");
+    tintOn = next;
+    const accent = s === 0 ? hsla(0, 0, 0.9) : hsla(h, Math.max(s, 0.6), 0.78);
+    card.style.setProperty("--accent", accent);
+    card.style.setProperty("--accent-soft", s === 0 ? "rgba(255,255,255,.16)" : hsla(h, Math.max(s, 0.6), 0.7, 0.2));
   }
 
-
-  // ── обкладинка: перевіряємо, що картинка справді є ──
-  // Порядок: обкладинка треку → кадр з відео YouTube → лише платівка.
-  // YouTube на місці відсутньої картинки віддає сіру заглушку 120×90 — її теж вважаємо «немає».
-  const coverSeen = new Map();
-  function probeCover(url) {
+  // ── обкладинка ──
+  // Обкладинки йдуть через бота (/cover): так з них можна взяти колір.
+  const onBot = location.protocol.startsWith("http") && !qs.get("demo");
+  const viaBot = (u) => (onBot && /^https?:/.test(u) ? `/cover?u=${encodeURIComponent(u)}` : u);
+  function load(url) {
     return new Promise((done) => {
-      if (!url) return done(false);
-      const hit = coverSeen.get(url);
-      if (hit && (hit.ok || Date.now() - hit.at < 60000)) return done(hit.ok);
+      if (!url) return done(null);
       const im = new Image();
-      const finish = (ok) => { coverSeen.set(url, { ok, at: Date.now() }); done(ok); };
-      im.onload = () => finish(im.naturalWidth > 120);
-      im.onerror = () => finish(false);
-      setTimeout(() => finish(false), 8000);
+      let fin = false;
+      const end = (v) => { if (!fin) { fin = true; done(v); } };
+      im.onload = () => end(im.naturalWidth > 120 ? im : null);  // сіра заглушка YouTube 120×90 — «немає обкладинки»
+      im.onerror = () => end(null);
+      setTimeout(() => end(null), 8000);
       im.src = url;
     });
   }
-  async function pickCover(t) {
-    if (!t) return "";
-    const tries = [t.cover];
-    if (t.video_id && !/^demo/.test(t.video_id)) tries.push(`https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg`);
-    for (const u of tries) if (u && await probeCover(u)) return u;
-    return "";
-  }
-  let coverToken = 0;
-  async function setCover(track) {
+  let imgOn = $("imgA"), coverToken = 0;
+  async function setCover(t) {
     const my = ++coverToken;
-    const url = await pickCover(track);
-    if (my !== coverToken) return;  // поки перевіряли, трек уже змінився
-    const v = url ? `url("${url.replace(/"/g, "%22")}")` : "";
-    $("sleeve").style.backgroundImage = v;
-    $("label").style.backgroundImage = v;
-    $("deck").classList.toggle("nocover", !!track && !url);  // немає обкладинки — лише платівка
-    $("card").classList.toggle("nocover", !!track && !url);
+    const tries = t ? [t.cover, t.video_id && !/^demo/.test(t.video_id) ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : ""].filter(Boolean) : [];
+    let im = null, src = "";
+    for (const u of tries) { src = viaBot(u); im = await load(src); if (im) break; }
+    if (my !== coverToken) return;  // поки вантажилось, трек уже змінився
+    card.classList.toggle("nocover", !im);
+    const next = imgOn === $("imgA") ? $("imgB") : $("imgA");
+    if (im) {
+      next.style.backgroundImage = `url("${src.replace(/"/g, "%22")}")`;
+      next.classList.add("on");
+    }
+    imgOn.classList.remove("on");
+    if (im) imgOn = next;
+    paint((im && dominant(im)) || PINK);
+  }
+
+  // ── назва, виконавець, хто замовив ──
+  function fitTitle() {
+    const wrap = $("titleWrap"), t = $("title");
+    t.classList.remove("scroll");
+    const overflow = t.scrollWidth - wrap.clientWidth;
+    wrap.classList.toggle("fits", overflow <= 0);
+    if (overflow > 0) {
+      t.style.setProperty("--shift", `-${overflow + 26}px`);
+      t.style.setProperty("--dur", `${Math.max(9, overflow / 16 + 7)}s`);
+      t.classList.add("scroll");
+    }
+  }
+  function fillTrack(now) {
+    $("title").textContent = now.title;
+    $("artist").textContent = now.artist || "";
+    $("dur").textContent = now.duration ? fmt(now.duration) : "";
+    const by = now.source === "request" && now.requested_by;
+    $("by").hidden = !by;
+    $("byName").textContent = by ? now.requested_by : "";
+    setCover(now);
+    requestAnimationFrame(fitTitle);
   }
 
   let lastFill = -1;
@@ -255,55 +243,29 @@
     f = Math.max(0, Math.min(1, f || 0));
     if (Math.abs(f - lastFill) < 0.0005) return;
     const el = $("fill");
-    el.classList.toggle("jump", Math.abs(f - lastFill) > 0.03);  // новий трек чи перемотка — без «проїзду» назад
+    el.classList.toggle("jump", Math.abs(f - lastFill) > 0.03);  // новий трек чи перемотка — без «проїзду»
     lastFill = f;
     el.style.transform = `scaleX(${f.toFixed(4)})`;
   }
 
-  function fillTrack(now) {
-    $("title").textContent = now.title;
-    $("artist").textContent = now.artist || "";
-    $("dur").textContent = now.duration ? fmt(now.duration) : "";
-    const st = $("sticker");
-    if (now.source === "request" && now.requested_by) {
-      st.textContent = `замовив(ла) @${now.requested_by}`;
-      st.classList.remove("plain");
-    } else {
-      st.textContent = "з плейлиста стрімера";
-      st.classList.add("plain");
-    }
-    setCover(now);
-    requestAnimationFrame(fitTitle);
-  }
-
   function render() {
     const now = state && state.now;
-    const live = state && (state.status === "playing" || state.status === "paused" || state.status === "loading");
+    const live = state && ["playing", "paused", "loading"].includes(state.status);
     card.classList.toggle("paused", !state || state.status !== "playing");
-
     if (now && live) {
       card.classList.remove("hint");
       show();
-      if (now.video_id !== currentId) {
-        const first = currentId === null;
-        currentId = now.video_id;
-        if (first) { fillTrack(now); }
-        else {
-          // платівка ховається в конверт, змінюється, виїжджає назад
-          deck.classList.add("swap");
-          setTimeout(() => { fillTrack(now); deck.classList.remove("swap"); }, 650);
-        }
-      }
+      if (now.video_id !== currentId) { currentId = now.video_id; fillTrack(now); }
       return;
     }
     currentId = null;
     if (idleMode === "hint" && state && state.active) {
       card.classList.add("hint");
       show();
-      setCover(null);
       $("title").textContent = "Замов трек!";
       $("artist").textContent = `${cmd} виконавець — назва`;
-      $("sticker").textContent = "";
+      $("by").hidden = true;
+      setCover(null);
       requestAnimationFrame(fitTitle);
     } else {
       hide();
@@ -334,11 +296,33 @@
 
   function apply(s) { state = s; receivedAt = performance.now(); render(); tick(); }
 
-  if (qs.get("demo")) {
-    apply({ status: "playing", active: true, now: {
-      video_id: "demo", title: qs.get("title") || "Обійми", artist: qs.get("artist") || "Океан Ельзи",
-      duration: 236, elapsed: 71, source: "request", requested_by: qs.get("user") || "pipa_fan",
-      cover: qs.get("cover") || "" } });
+  // ── демо: обкладинки малюються тут же, щоб віджет можна було налаштувати без бота й інтернету ──
+  function demoCover(c1, c2, c3) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 300;
+    const x = c.getContext("2d");
+    const g = x.createLinearGradient(0, 0, 300, 300);
+    g.addColorStop(0, c1); g.addColorStop(1, c2);
+    x.fillStyle = g; x.fillRect(0, 0, 300, 300);
+    x.globalAlpha = 0.55;
+    for (let i = 0; i < 7; i++) {
+      x.beginPath(); x.fillStyle = i % 2 ? c3 : "#ffffff";
+      x.arc(60 + i * 32, 150 + Math.sin(i) * 70, 70 - i * 7, 0, Math.PI * 2); x.fill();
+    }
+    return c.toDataURL("image/png");
+  }
+  const demo = window.PB_DEMO || qs.get("demo");  // PB_DEMO — для сторінки попереднього перегляду
+  if (demo) {
+    const tracks = [
+      { video_id: "demo1", title: qs.get("title") || "LEMONADE", artist: qs.get("artist") || "aespa", duration: 187, requested_by: qs.get("user") || "pipa_fan", source: "request", cover: qs.get("cover") || demoCover("#d6f04a", "#5a8f1c", "#f6ff9e") },
+      { video_id: "demo2", title: "Обійми", artist: "Океан Ельзи", duration: 236, requested_by: "kotyk_ua", source: "request", cover: demoCover("#ff6aa8", "#7a1f6b", "#ffc2dd") },
+      { video_id: "demo3", title: "Шум", artist: "Go_A", duration: 181, source: "fallback", cover: demoCover("#38c8f0", "#123a7a", "#9ff3ff") },
+      { video_id: "demo4", title: "Стефанія (Mama) — Live at Eurovision Song Contest 2022", artist: "Kalush Orchestra", duration: 204, requested_by: "найкращий_глядач_твічу", source: "request", cover: demoCover("#ffb547", "#9a3c0c", "#ffe2a8") },
+    ];
+    let i = Math.max(0, (parseInt(demo, 10) || 1) - 1);  // ?demo=2 — другий демо-трек
+    const play = () => apply({ status: "playing", active: true, now: { ...tracks[i % tracks.length], elapsed: 22 + (i * 31) % 90 } });
+    play();
+    if (demo === "cycle") setInterval(() => { i++; play(); }, 6000);
   } else {
     const connect = () => {
       const es = new EventSource("/api/events");

@@ -133,10 +133,21 @@ async fn api_matches_v1() {
     assert_eq!(up["current_known"], true);
 
     // сторінки
-    for p in ["/widget", "/panel", "/app", "/setup", "/mini", "/favicon.ico", "/"] {
+    for p in ["/widget", "/widget/classic", "/static/fonts/FixelDisplay-Bold.woff2", "/panel", "/app", "/setup", "/mini", "/favicon.ico", "/"] {
         let r = t.http.get(format!("{}{p}", t.base)).send().await.unwrap();
         assert_eq!(r.status().as_u16(), 200, "{p}");
     }
+}
+
+#[test]
+fn covers_only_from_youtube() {
+    use pipabobik_core::server::cover_allowed;
+    assert!(cover_allowed("https://lh3.googleusercontent.com/abc=w544-h544"));
+    assert!(cover_allowed("https://i.ytimg.com/vi/x/hqdefault.jpg"));
+    assert!(!cover_allowed("http://i.ytimg.com/vi/x/hqdefault.jpg"));
+    assert!(!cover_allowed("https://evil.com/?i.ytimg.com"));
+    assert!(!cover_allowed("https://ytimg.com.evil.com/a.jpg"));
+    assert!(!cover_allowed("file:///etc/passwd"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
