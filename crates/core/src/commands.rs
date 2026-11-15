@@ -223,8 +223,22 @@ impl Commands {
         }
         let cfg = self.cfg.read().unwrap().clone();
         let acc = Access::new(&cfg);
-        let parts: Vec<String> = hints.into_iter().filter(|(k, _)| !cfg.commands(k).is_empty() && acc.can(m, k)).map(|(_, h)| h).collect();
-        format!("🎵 pipabobik: {}", if parts.is_empty() { "тобі зараз доступна лише ця підказка".into() } else { parts.join(" · ") })
+        // приховані стрімеркою команди не показуються в списку (але працюють, якщо дозволені)
+        let hidden = cfg.str_list("help", "hidden");
+        let parts: Vec<String> = hints
+            .into_iter()
+            .filter(|(k, _)| !cfg.commands(k).is_empty() && acc.can(m, k) && !hidden.iter().any(|h| h == k))
+            .map(|(_, h)| h)
+            .collect();
+        let list = if parts.is_empty() { "тобі зараз доступна лише ця підказка".to_string() } else { parts.join(" · ") };
+        let text = cfg.str("help", "text");
+        let text = if text.trim().is_empty() { crate::config::DEFAULT_HELP.to_string() } else { text };
+        text.replace(crate::config::HELP_PLACEHOLDER, &list).chars().take(500).collect()
+    }
+
+    /// Що побачить звичайний глядач (без значків) — для попереднього перегляду в застосунку.
+    pub fn help_preview(&self) -> String {
+        self.help_text(&ChatMessage { login: "viewer".into(), display_name: "viewer".into(), ..Default::default() })
     }
 
     async fn cmd_help(&self, m: &ChatMessage) {

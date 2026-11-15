@@ -442,6 +442,7 @@ const SETTINGS: &[(&str, &[(&str, Ty)])] = &[
     ("player", &[("normalize", Ty::Bool)]),
     ("google", &[("fallback_playlist", Ty::Str), ("fallback_shuffle", Ty::Bool)]),
     ("twitch", &[("helpers", Ty::List)]),
+    ("widget", &[("pink", Ty::Bool)]),
 ];
 
 async fn api_settings_get(State(bot): S, h: HeaderMap) -> Response {
@@ -687,12 +688,24 @@ fn access_payload(bot: &Bot) -> Value {
         "limits": limits,
         "helpers": cfg.str_list("twitch", "helpers"),
         "max_queue": cfg.raw["rules"]["max_queue"].as_u64().unwrap_or(30),
+        "help": {
+            "text": cfg.str("help", "text"),
+            "hidden": cfg.str_list("help", "hidden"),
+            "placeholder": crate::config::HELP_PLACEHOLDER,
+            "default": crate::config::DEFAULT_HELP,
+        },
     })
+}
+
+fn access_payload_full(bot: &Bot) -> Value {
+    let mut v = access_payload(bot);
+    v["help"]["preview"] = json!(bot.commands.help_preview());
+    v
 }
 
 async fn api_access_get(State(bot): S, h: HeaderMap) -> Response {
     guard!(bot, h);
-    Json(access_payload(&bot)).into_response()
+    Json(access_payload_full(&bot)).into_response()
 }
 
 async fn api_access_set(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
@@ -785,6 +798,19 @@ async fn api_access_set(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
         out
     });
 
+    // підказка !музика: власний текст і які команди не показувати в списку
+    let mut help_upd = Map::new();
+    if let Some(h) = d.get("help").and_then(|h| h.as_object()) {
+        if let Some(t) = h.get("text") {
+            let t: String = as_str(t).trim().chars().take(450).collect();
+            help_upd.insert("text".into(), json!(if t.is_empty() { crate::config::DEFAULT_HELP.to_string() } else { t }));
+        }
+        if let Some(hd) = h.get("hidden") {
+            let keys: Vec<String> = hd.as_array().map(|a| a.iter().map(as_str).filter(|k| COMMANDS.iter().any(|c| c.0 == k)).collect()).unwrap_or_default();
+            help_upd.insert("hidden".into(), json!(keys));
+        }
+    }
+
     // усе перевірено — застосовуємо одразу і зберігаємо в config.toml
     let mut updates: Vec<(String, Map<String, Value>)> = Vec::new();
     let changed_names: Map<String, Value> = new_names.iter().zip(cur_names.iter()).filter(|(n, c)| n.1 != c.1).map(|(n, _)| (n.0.clone(), json!(n.1))).collect();
@@ -805,6 +831,12 @@ async fn api_access_set(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
         if let Some(hl) = &helpers {
             cfg.set("twitch", "helpers", json!(hl));
         }
+        for (k, v) in &help_upd {
+            cfg.set("help", k, v.clone());
+        }
+    }
+    if !help_upd.is_empty() {
+        updates.push(("help".into(), help_upd));
     }
     if !changed_names.is_empty() {
         updates.push(("commands".into(), changed_names.clone()));
@@ -830,7 +862,7 @@ async fn api_access_set(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
         }
         tracing::info!("Доступ оновлено з застосунку: {}", updates.iter().map(|(s, _)| s.as_str()).collect::<Vec<_>>().join(", "));
     }
-    Json(access_payload(&bot)).into_response()
+    Json(access_payload_full(&bot)).into_response()
 }
 
 // ── майстер першого запуску й діагностика ──

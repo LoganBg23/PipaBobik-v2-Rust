@@ -114,6 +114,23 @@ async fn api_matches_v1() {
     assert_eq!(acc["limits"]["subs"]["max_per_user"], 5);
     assert_eq!(acc["max_queue"], 1);
 
+    // підказка !музика: власний текст і приховані команди
+    let (_, acc) = t.get("/api/access").await;
+    assert!(acc["help"]["preview"].as_str().unwrap().starts_with("🎵 pipabobik: !трек назва"));
+    let (s, acc) = t.post("/api/access", json!({"help": {"text": "Привіт! {команди} · донат на ЗСУ", "hidden": ["wrong", "nope"]}})).await;
+    assert_eq!(s, 200);
+    let p = acc["help"]["preview"].as_str().unwrap();
+    assert!(p.starts_with("Привіт! !трек назва") && p.ends_with("донат на ЗСУ") && !p.contains("!нетой"), "{p}");
+    assert_eq!(acc["help"]["hidden"], json!(["wrong"]));
+    let (_, acc) = t.post("/api/access", json!({"help": {"text": "  "}})).await;
+    assert_eq!(acc["help"]["text"], "🎵 pipabobik: {команди}");
+
+    // віджет завжди рожевий
+    let (s, _) = t.post("/api/settings", json!({"widget": {"pink": true}})).await;
+    assert_eq!(s, 200);
+    let (_, st) = t.get("/api/state").await;
+    assert_eq!(st["widget"]["pink"], true);
+
     // фонові плейлисти
     let (s, pl) = t.post("/api/playlists", json!({"action": "add", "link": "https://music.youtube.com/playlist?list=PLtest123", "name": "Тест", "select": true})).await;
     assert_eq!(s, 200);

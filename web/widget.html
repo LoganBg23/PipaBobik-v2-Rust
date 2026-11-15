@@ -165,7 +165,13 @@
   }
   const hsla = (h, s, l, a = 1) => `hsla(${h.toFixed(0)}, ${(s * 100).toFixed(0)}%, ${(l * 100).toFixed(0)}%, ${a})`;
   let tintOn = $("tintA");
+  // «Рожевий віджет» у застосунку: колір завжди фірмовий, не з обкладинки
+  let forcePink = qs.get("pink") === "1", coverColor = PINK, painted = null;
   function paint(c) {
+    coverColor = c;
+    if (forcePink) c = PINK;
+    if (painted === c) return;
+    painted = c;
     const { h } = c;
     const s = c.s < 0.08 ? 0 : Math.min(1, c.s);
     // темний напівпрозорий фон того ж відтінку + м'яке сяйво від обкладинки
@@ -294,7 +300,12 @@
     }
   }
 
-  function apply(s) { state = s; receivedAt = performance.now(); render(); tick(); }
+  function apply(s) {
+    state = s; receivedAt = performance.now();
+    const pink = qs.get("pink") === "1" || !!(s.widget && s.widget.pink);
+    if (pink !== forcePink) { forcePink = pink; paint(coverColor); }  // плавно перефарбовується
+    render(); tick();
+  }
 
   // ── демо: обкладинки малюються тут же, щоб віджет можна було налаштувати без бота й інтернету ──
   function demoCover(c1, c2, c3) {

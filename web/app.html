@@ -276,6 +276,10 @@
   .foot-r { display: flex; gap: 6px; }
   .round:disabled { opacity: .45; cursor: default; }
 
+  .helpcmds { display: flex; flex-wrap: wrap; gap: 6px; }
+  .helpcmds label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: var(--raised); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .helpcmds input { accent-color: var(--hot); }
+  .helpprev { padding: 10px 12px; border-radius: var(--r-sm); background: var(--night); font-size: 13px; line-height: 1.5; word-break: break-word; }
   .ask { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(10, 2, 8, .62); }
   .ask[hidden] { display: none; }
   .ask .box { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 18px; box-shadow: 0 18px 50px rgba(0, 0, 0, .5); }
@@ -377,6 +381,16 @@
       <div class="group">Команди чату</div>
       <ul class="cmds" id="cmds"><li class="empty">Завантажую…</li></ul>
 
+      <div class="group">Підказка «!музика»</div>
+      <div class="form">
+        <div class="field col"><label for="helpText">Текст відповіді<small><b>{команди}</b> — сюди бот вставить команди, доступні тому, хто спитав</small></label>
+          <textarea id="helpText" rows="2" maxlength="450"></textarea></div>
+        <div class="field col"><span class="lbl">Показувати в списку<small>приховані команди працюють як і раніше, просто не потрапляють у підказку</small></span>
+          <div class="helpcmds" id="helpCmds"></div></div>
+        <div class="field col"><span class="lbl">Так побачить звичайний глядач</span>
+          <div class="helpprev" id="helpPreview"></div></div>
+      </div>
+
       <div class="group">Ліміти замовлень</div>
       <div class="form">
         <div class="seg wide" id="limRole" role="radiogroup" aria-label="Роль"></div>
@@ -438,6 +452,8 @@
           <label class="switch"><input type="checkbox" id="announce_tracks" data-key="chat.announce_tracks"><span></span></label></div>
         <div class="field"><label for="greet_on_stream_start">Вітатися на початку трансляції</label>
           <label class="switch"><input type="checkbox" id="greet_on_stream_start" data-key="chat.greet_on_stream_start"><span></span></label></div>
+        <div class="field"><label for="widget_pink">Рожевий віджет<small>завжди фірмовий рожевий, а не колір обкладинки</small></label>
+          <label class="switch"><input type="checkbox" id="widget_pink" data-key="widget.pink"><span></span></label></div>
       </div>
     </div>
 
@@ -1009,7 +1025,23 @@
     });
     $("max_queue").value = acc.max_queue;
     renderHelpers();
+    renderHelp();
   }
+
+  // ── підказка !музика ──
+  function renderHelp() {
+    const h = acc.help || {};
+    if (document.activeElement !== $("helpText")) $("helpText").value = h.text || "";
+    const hidden = new Set(h.hidden || []);
+    $("helpCmds").innerHTML = acc.commands.filter((c) => c.key !== "help").map((c) =>
+      `<label><input type="checkbox" data-help-cmd="${c.key}" ${hidden.has(c.key) ? "" : "checked"}>${esc(c.names[0] || c.label)}</label>`).join("");
+    $("helpPreview").textContent = h.preview || "";
+  }
+  $("helpText").addEventListener("change", () => saveAccess({ help: { text: $("helpText").value } }, "Підказку збережено"));
+  $("helpCmds").addEventListener("change", () => {
+    const hidden = [...document.querySelectorAll("[data-help-cmd]")].filter((x) => !x.checked).map((x) => x.dataset.helpCmd);
+    saveAccess({ help: { hidden } }, "Збережено");
+  });
 
   // назви: правка прямо в чипі
   function editName(key, i) {

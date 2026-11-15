@@ -8,6 +8,10 @@ use serde_json::{json, Map, Value};
 
 use crate::access::{default_limits, default_permissions, normalize_limits, normalize_roles};
 
+pub const DEFAULT_HELP: &str = "🎵 pipabobik: {команди}";
+/// Що підставляється в текст підказки замість списку команд.
+pub const HELP_PLACEHOLDER: &str = "{команди}";
+
 pub fn defaults() -> Value {
     json!({
         "twitch": {"channel": "", "client_id": "", "client_secret": "", "admins": [], "helpers": []},
@@ -36,6 +40,8 @@ pub fn defaults() -> Value {
         "limits": default_limits(),
         "chat": {"announce_tracks": false, "greet_on_stream_start": true},
         "server": {"port": 17777},
+        "help": {"text": DEFAULT_HELP, "hidden": []},
+        "widget": {"pink": false},
         "update": {"auto_check": true}
     })
 }
