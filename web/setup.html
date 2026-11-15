@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>pipabobik</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ті самі кольори й форми, що в застосунку (app.html) */
+  :root {
+    --night: #1c0716; --surface: #2a0d22; --raised: #3b1531; --line: #4e1f42;
+    --hot: #ff3d9a; --blush: #ffb3d6; --pearl: #fdeaf4; --muted: #c592b2; --ok: #8ff0c8; --warn: #ffcf70;
+    --r-lg: 22px; --r-md: 14px; --r-sm: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { color-scheme: dark; }
+  body {
+    font: 500 14px/1.5 "Manrope", system-ui, sans-serif; color: var(--pearl);
+    background:
+      radial-gradient(600px 380px at 85% -10%, rgba(255, 61, 154, .22), transparent 70%),
+      radial-gradient(500px 300px at -10% 110%, rgba(197, 139, 255, .12), transparent 70%),
+      var(--night);
+    min-height: 100vh; padding: 18px 16px 28px;
+  }
+  main { max-width: 560px; margin: 0 auto; display: grid; gap: 12px; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--blush); outline-offset: 2px; border-radius: 8px; }
+  a { color: var(--blush); }
+  .logo { font-family: "Unbounded", sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -.02em; color: var(--blush); }
+  .logo b { color: var(--hot); }
+  .lead { color: var(--muted); margin-top: 4px; }
+  section { background: var(--surface); border-radius: var(--r-lg); padding: 16px; display: grid; gap: 10px; }
+  h2 { font-family: "Unbounded", sans-serif; font-size: 14px; font-weight: 600; color: var(--blush); }
+  h2 span { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 50%; background: var(--hot); color: #fff; font-size: 12px; }
+  p.hint { color: var(--muted); font-size: 13px; }
+  ol.steps { color: var(--muted); font-size: 13px; padding-left: 18px; display: grid; gap: 3px; }
+  ol.steps b { color: var(--pearl); }
+  label.f { display: grid; gap: 5px; font-weight: 700; }
+  label.f small { color: var(--muted); font-weight: 500; font-size: 12px; }
+  input[type=text], input[type=password], select {
+    width: 100%; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night);
+  }
+  .copy { display: flex; gap: 6px; }
+  .copy code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 9px 11px; border-radius: var(--r-sm); background: var(--night); font-size: 13px; }
+  .ghost { padding: 9px 13px; border-radius: 12px; background: var(--raised); font-weight: 800; color: var(--pearl); border: 0; cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .ghost:hover { background: var(--line); }
+  .primary { padding: 13px 18px; border-radius: 14px; background: var(--hot); color: #fff; font-weight: 800; font-size: 15px; border: 0; cursor: pointer; width: 100%; }
+  .primary:disabled { opacity: .55; cursor: default; }
+  .msg { min-height: 20px; font-weight: 700; }
+  .msg.bad { color: #ff8fab; }
+  .msg.good { color: var(--ok); }
+  #checks { list-style: none; display: grid; gap: 6px; }
+  #checks li { padding: 9px 11px; border-radius: var(--r-md); background: var(--night); }
+  #checks li small { display: block; color: var(--muted); font-size: 12px; }
+  #checks li.bad { box-shadow: inset 3px 0 0 #ff6b8b; }
+  #checks li.ok { box-shadow: inset 3px 0 0 var(--ok); }
+  #loginBox[hidden], #doneBox[hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">pipa<b>bobik</b></div>
+    <p class="lead">Чотири кроки — і бот гратиме музику з чату. Усе це можна змінити пізніше.</p>
+  </header>
+
+  <form id="form" autocomplete="off">
+    <section>
+      <h2><span>1</span>Ваш канал</h2>
+      <label class="f">Нік на Twitch, де ви стрімите
+        <input type="text" id="channel" placeholder="pipa_stream" spellcheck="false" required>
+      </label>
+    </section>
+
+    <section style="margin-top:12px">
+      <h2><span>2</span>Застосунок Twitch</h2>
+      <ol class="steps">
+        <li>Відкрийте <a href="https://dev.twitch.tv/console/apps/create" target="_blank" rel="noopener">dev.twitch.tv</a> своїм акаунтом і натисніть <b>Register Your Application</b>.</li>
+        <li><b>Name</b> — будь-яка, напр. pipabobik-ваш-нік. <b>Category</b> — Chat Bot, <b>Client Type</b> — Confidential.</li>
+        <li>У <b>OAuth Redirect URLs</b> вставте адресу нижче.</li>
+        <li><b>Manage</b> → скопіюйте Client ID → <b>New Secret</b> → скопіюйте Secret.</li>
+      </ol>
+      <div class="copy"><code id="redirect">http://localhost:17777/auth/callback</code><button type="button" class="ghost" id="copyRedirect">Копіювати</button></div>
+      <label class="f">Client ID
+        <input type="text" id="client_id" spellcheck="false" required>
+      </label>
+      <label class="f">Client Secret
+        <input type="password" id="client_secret" spellcheck="false">
+        <small id="secretHint">Його видно лише раз — якщо загубили, натисніть New Secret ще раз.</small>
+      </label>
+    </section>
+
+    <section style="margin-top:12px">
+      <h2><span>3</span>Вхід у Google</h2>
+      <p class="hint">Бот бере ваш вхід у YouTube Music з браузера: так доступні треки 18+ і ваші вподобані. Увійдіть на music.youtube.com у Firefox — Chrome не віддає вхід іншим програмам.</p>
+      <label class="f">Звідки взяти вхід
+        <select id="browser">
+          <option value="firefox">Firefox</option>
+          <option value="">Без входу</option>
+        </select>
+      </label>
+    </section>
+
+    <section style="margin-top:12px">
+      <h2><span>4</span>Коли черга порожня</h2>
+      <label class="f">Фоновий плейлист
+        <input type="text" id="fallback" spellcheck="false" placeholder="LM">
+        <small>LM — ваші вподобані в YouTube Music. Можна вставити посилання на плейлист або «-», щоб була тиша.</small>
+      </label>
+    </section>
+
+    <section style="margin-top:12px">
+      <button class="primary" id="save" type="submit">Зберегти</button>
+      <div class="msg" id="msg" role="status" aria-live="polite"></div>
+      <div id="loginBox" hidden>
+        <p class="hint">Останній крок: увійдіть у Twitch тим акаунтом, від імені якого писатиме бот. Найзручніше — в окремому акаунті «pipabobik» із модеркою на вашому каналі.</p>
+        <p style="margin-top:8px"><a class="ghost" href="/auth" target="_blank" rel="noopener">Увійти в Twitch</a></p>
+      </div>
+      <div id="doneBox" hidden>
+        <button class="primary" type="button" id="open">Відкрити pipabobik</button>
+      </div>
+    </section>
+  </form>
+
+  <section>
+    <h2>Перевірка</h2>
+    <p class="hint">Перевіряє все, що потрібно боту: Twitch, програвач, yt-dlp, вхід у Google, пошук і звук.</p>
+    <button class="ghost" id="check" type="button">Перевірити</button>
+    <ul id="checks"></ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  const key = new URLSearchParams(location.search).get("key") || "";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const say = (text, cls = "") => { $("msg").textContent = text; $("msg").className = "msg " + cls; };
+  async function api(path, body, method = "POST") {
+    const r = await fetch(path, { method, headers: { "Content-Type": "application/json", "X-Pipabobik-Key": key }, body: body ? JSON.stringify(body) : undefined });
+    if (r.status === 403) throw new Error("Невірний ключ — відкрийте pipabobik через ярлик");
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Не вдалося");
+    return data;
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function load() {
+    try {
+      const s = await api("/api/setup", null, "GET");
+      $("channel").value = s.channel || "";
+      $("client_id").value = s.client_id || "";
+      $("redirect").textContent = s.redirect;
+      if (s.has_secret) { $("client_secret").placeholder = "збережено — залиште порожнім"; $("secretHint").textContent = "Secret уже збережено. Вставте новий, лише якщо змінили його."; }
+      $("browser").value = s.cookies_from_browser === "" ? "" : "firefox";
+      $("fallback").value = s.fallback_playlist === "" && s.configured ? "-" : (s.fallback_playlist || "LM");
+      if (s.configured) showLogin(s.twitch);
+    } catch (e) { say(e.message, "bad"); }
+  }
+
+  function showLogin(authed) {
+    $("loginBox").hidden = !!authed;
+    $("doneBox").hidden = !authed;
+    if (authed) say("Усе налаштовано 🎀", "good");
+  }
+
+  // після перезапуску бота чекаємо, поки він повернеться, а потім — поки ви увійдете в Twitch
+  async function waitBot(oldBoot) {
+    for (let i = 0; i < 60; i++) {
+      await sleep(700);
+      try {
+        const s = await (await fetch("/api/state")).json();
+        if (s.boot && s.boot !== oldBoot) return s;
+      } catch {}
+    }
+    return null;
+  }
+  async function waitLogin() {
+    for (;;) {
+      await sleep(2000);
+      try {
+        const s = await (await fetch("/api/state")).json();
+        if (s.health && s.health.twitch) return showLogin(true);
+      } catch {}
+    }
+  }
+
+  $("copyRedirect").onclick = async () => {
+    try { await navigator.clipboard.writeText($("redirect").textContent); say("Скопійовано", "good"); }
+    catch { prompt("Адреса для OAuth Redirect URLs:", $("redirect").textContent); }
+  };
+
+  $("form").onsubmit = async (e) => {
+    e.preventDefault();
+    $("save").disabled = true;
+    say("Зберігаю…");
+    try {
+      const before = await (await fetch("/api/state")).json().catch(() => ({}));
+      await api("/api/setup", {
+        channel: $("channel").value, client_id: $("client_id").value, client_secret: $("client_secret").value,
+        cookies_from_browser: $("browser").value, fallback_playlist: $("fallback").value,
+      });
+      $("client_secret").value = "";
+      say("Збережено. Перезапускаю бота…");
+      const s = await waitBot(before.boot);
+      if (!s) { say("Бот не повернувся — закрийте й знову відкрийте pipabobik", "bad"); return; }
+      say("Збережено ✅", "good");
+      showLogin(s.health && s.health.twitch);
+      if (!(s.health && s.health.twitch)) waitLogin();
+    } catch (err) {
+      say(err.message, "bad");
+    } finally {
+      $("save").disabled = false;
+    }
+  };
+
+  $("open").onclick = () => { location.href = `/app?key=${encodeURIComponent(key)}`; };
+
+  $("check").onclick = async () => {
+    $("check").disabled = true;
+    $("check").textContent = "Перевіряю… (до хвилини)";
+    $("checks").innerHTML = "";
+    try {
+      const r = await api("/api/check", {});
+      $("checks").innerHTML = r.items.map((i) =>
+        `<li class="${i.ok ? "ok" : "bad"}">${i.ok ? "✅" : "❌"} ${esc(i.text)}${i.ok ? "" : `<small>${esc(i.hint)}</small>`}</li>`).join("")
+        + `<li class="${r.ok ? "ok" : "bad"}"><b>${r.ok ? "Все гаразд! 🎉" : "Є проблеми — див. ❌ вище"}</b></li>`;
+    } catch (e) {
+      $("checks").innerHTML = `<li class="bad">❌ ${esc(e.message)}</li>`;
+    } finally {
+      $("check").disabled = false;
+      $("check").textContent = "Перевірити ще раз";
+    }
+  };
+
+  load();
+})();
+</script>
+</body>
+</html>

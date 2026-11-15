@@ -1,0 +1,8 @@
+/target/
+config.toml
+data/
+bin/
+cookies.txt
+*.log
+.pipabobik-version
+src-tauri/gen/

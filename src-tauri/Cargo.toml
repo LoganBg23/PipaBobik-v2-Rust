@@ -1,0 +1,26 @@
+[package]
+name = "pipabobik"
+version.workspace = true
+edition.workspace = true
+description = "PipaBobik v2 — музичний бот для Twitch"
+
+[[bin]]
+name = "PipaBobik"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+pipabobik-core = { path = "../crates/core" }
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+tracing = "0.1"
+
+[features]
+# сторінку «Запускаю бота…» вбудовуємо в .exe і без tauri-cli
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

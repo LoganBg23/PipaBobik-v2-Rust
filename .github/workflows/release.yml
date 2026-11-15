@@ -1,0 +1,65 @@
+name: Збірка й випуск
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      PIPABOBIK_VERSION: 2.0.${{ github.run_number }}
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Тести
+        run: cargo test -p pipabobik-core
+
+      - name: Збірка PipaBobik.exe
+        run: cargo build --release -p pipabobik
+
+      - name: Архів
+        shell: pwsh
+        run: |
+          $d = "dist/PipaBobik"
+          New-Item -ItemType Directory -Force -Path "$d/obs" | Out-Null
+          Copy-Item target/release/PipaBobik.exe $d/
+          Copy-Item obs/pipabobik.lua $d/obs/
+          Copy-Item config.example.toml, install.bat, README.md $d/
+          Compress-Archive -Path $d -DestinationPath dist/PipaBobik-windows-x64.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PipaBobik-windows-x64
+          path: dist/PipaBobik-windows-x64.zip
+
+      - name: Випуск на GitHub (з нього застосунок оновлюється кнопкою «Оновити»)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$PIPABOBIK_VERSION"
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$prev" ]; then notes=$(git log --no-merges --format='- %s' "$prev..HEAD" | head -30)
+          else notes=$(git log --no-merges --format='- %s' -20); fi
+          title=$(git log -1 --format='%s')
+          printf '%s\n' "$notes" > notes.md
+          gh release create "$tag" dist/PipaBobik-windows-x64.zip --title "$title" --notes-file notes.md --target "$GITHUB_SHA"
