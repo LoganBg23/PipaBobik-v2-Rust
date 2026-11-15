@@ -220,6 +220,18 @@
   .row .rt { display: flex; align-items: center; gap: 4px; }
   .row .eta, .row .note2 { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .row .hov { display: none; }
+  /* трек, що грає: першим у черзі, поки не дограє */
+  .row.now { background: rgba(255, 61, 154, .1); box-shadow: inset 3px 0 0 var(--hot); }
+  .row.now:hover, .row.now:focus-within { background: rgba(255, 61, 154, .16); }
+  .row.now .tt { color: var(--blush); }
+  .playing-tag { display: inline-flex; align-items: center; gap: 6px; color: var(--blush) !important; }
+  .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+  .eq b { width: 3px; height: 12px; border-radius: 1px; background: var(--hot); transform: scaleY(.33); transform-origin: 50% 100%; }
+  .row.now.on .eq b { animation: eq 1s ease-in-out infinite; will-change: transform; }
+  .row.now.on .eq b:nth-child(2) { animation-delay: -.35s; }
+  .row.now.on .eq b:nth-child(3) { animation-delay: -.7s; }
+  @keyframes eq { 50% { transform: scaleY(1); } }
+  body.calm .eq b { animation-play-state: paused; }
   .row:hover .hov, .row:focus-within .hov { display: inline-flex; }
   .row:hover .eta, .row:focus-within .eta { display: none; }
   .sq { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; background: var(--surface); color: var(--pearl); flex: none; }
@@ -1055,7 +1067,9 @@
     return Math.max(0, n.duration - el);
   }
   function renderQueue(s) {
-    $("qn").textContent = s.queue_len ? `· ${s.queue_len}` : "";
+    // трек, що грає, теж у черзі — першим; зникає, коли дограє
+    const n = s.now, total = (s.queue_len || 0) + (n ? 1 : 0);
+    $("qn").textContent = total ? `· ${total}` : "";
     errorsBadge(s.errors);
     renderUpdate(s);
     $("clearBtn").hidden = !s.queue_len;
@@ -1063,14 +1077,19 @@
     const etas = s.queue.map((t) => { const at = t0; if (!t.duration) known = false; t0 += t.duration || 0; return known ? at : null; });
     $("qEnd").textContent = s.queue.length && known && s.status !== "paused"
       ? `усе дограє о ${new Date(Date.now() + t0 * 1000).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}` : "";
-    $("queue").innerHTML = s.queue.length ? s.queue.map((t, i) => {
+    const nowRow = !n ? "" : row(n, `<span class="eta playing-tag">${s.status === "loading" ? "вмикаю…" : s.status === "paused" ? "на паузі" : `<i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>грає зараз`}</span>
+        <button class="sq hov" data-nowskip title="Пропустити трек" aria-label="Пропустити трек"><svg viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg></button>
+        ${banBtn(n)}`, esc(n.artist || "") + (n.source === "request" && n.requested_by ? " · @" + esc(n.requested_by) : " · з плейлиста стримерки"))
+      .replace('<li class="row">', `<li class="row now ${s.status === "playing" ? "on" : ""}">`);
+    $("queue").innerHTML = nowRow + (s.queue.length ? s.queue.map((t, i) => {
       const eta = etas[i] === null ? (t.duration ? fmt(t.duration) : "") : etas[i] < 50 ? "далі" : `через ${Math.max(1, Math.round(etas[i] / 60))} хв`;
       return row(t, `<span class="eta">${eta}</span>
         ${i ? `<button class="btn sm hov" data-q="next" data-i="${i}" title="Зіграти наступним">Наступним</button>` : ""}
         ${banBtn(t)}
         <button class="sq hov" data-q="remove" data-i="${i}" title="Прибрати з черги" aria-label="Прибрати з черги">${xIcon}</button>`);
     }).join("")
-      : `<li class="empty"><b>Черга порожня</b>Глядачі замовляють командою в чаті, а ви — через рядок пошуку вище.</li>`;
+      : n ? `<li class="empty" style="padding:14px 12px">Далі поки нічого — замовляйте в чаті або через пошук вище.</li>`
+        : `<li class="empty"><b>Черга порожня</b>Глядачі замовляють командою в чаті, а ви — через рядок пошуку вище.</li>`);
   }
 
   function renderHistory(s) {
@@ -1293,6 +1312,7 @@
     document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x.dataset.tab === which));
   }
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => showList(t.dataset.tab));
+  document.body.addEventListener("click", (e) => { if (e.target.closest("[data-nowskip]")) document.querySelector(".controls [data-act=skip]").click(); });
   const closeResults = () => { if ($("v-add").hidden) return false; showList("queue"); $("q").value = ""; return true; };
   $("resClose").onclick = closeResults;
 
