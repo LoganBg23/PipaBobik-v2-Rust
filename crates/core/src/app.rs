@@ -59,6 +59,27 @@ pub fn open_url(url: &str) {
     let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }
 
+/// Що пише скрипт OBS у data/obs_state: «live 1731660000» (стан і час запису).
+/// Повертає (стан, свіжий): свіжий — записаний не раніше ніж 15 секунд тому
+/// (скрипт OBS оновлює запис кожні 3 секунди). Записи, зроблені до запуску бота, без режиму OBS
+/// не враховуються зовсім.
+pub fn read_obs_state(path: &std::path::Path, started: std::time::SystemTime, obs_mode: bool) -> (String, bool) {
+    let Ok(meta) = std::fs::metadata(path) else { return (String::new(), false) };
+    let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let mut parts = text.split_whitespace();
+    let state = parts.next().unwrap_or("").to_string();
+    let written = parts.next().and_then(|t| t.parse::<f64>().ok()).unwrap_or_else(|| modified.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0));
+    let age = now_secs() - written;
+    let fresh = (-30.0..=15.0).contains(&age);
+    let after_start = modified >= started;
+    if after_start || (obs_mode && fresh) {
+        (state, fresh)
+    } else {
+        (String::new(), false)
+    }
+}
+
 /// Ключ застосунку: без нього сторінки не можуть керувати ботом.
 pub fn load_key() -> String {
     let p = paths::data_dir().join("panel.key");
@@ -274,19 +295,15 @@ impl Bot {
     }
 
     /// Аргументи для нового екземпляра: той самий режим, музика грає, якщо грала.
+    /// Музика після перезапуску грає, лише якщо зараз іде трансляція. Тестовий режим
+    /// (музика, увімкнена вручну без трансляції) після перезапуску не відновлюється.
     pub fn restart_args(&self) -> Vec<String> {
         let mut args: Vec<String> = Vec::new();
         if self.opts.obs_mode {
             args.push("--obs".into());
         }
-        args.extend(self.opts.extra.iter().cloned());
-        if self.jukebox.is_active() {
-            if self.opts.obs_mode {
-                args.push("--live".into());
-            }
-        } else if !self.opts.obs_mode {
-            args.push("--paused".into());
-        }
+        args.extend(self.opts.extra.iter().cloned().filter(|a| a != "--live" && a != "--paused"));
+        args.push(if self.obs_live() == Some(true) { "--live" } else { "--paused" }.into());
         args
     }
 
@@ -474,7 +491,9 @@ impl Bot {
             tokio::spawn(self.clone().watch_obs()),
             tokio::spawn(self.clone().cpu_report()),
         ];
-        if self.opts.live || !(self.opts.obs_mode || self.opts.paused) {
+        // музика вмикається сама ЛИШЕ коли йде трансляція (--live від скрипта OBS).
+        // Без трансляції — тільки вручну: перемикач «Музика» в застосунку (тестовий режим).
+        if self.opts.live {
             self.jukebox.activate();
         }
         {
@@ -532,19 +551,19 @@ impl Bot {
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             tick += 1;
-            let mut state = String::new();
-            if let Ok(meta) = std::fs::metadata(&state_file) {
-                let fresh = meta.modified().map(|m| m >= started).unwrap_or(false);
-                if self.opts.obs_mode || fresh {
-                    state = std::fs::read_to_string(&state_file).unwrap_or_default().split_whitespace().next().unwrap_or("").to_string();
-                }
-            }
+            let (state, fresh) = read_obs_state(&state_file, started, self.opts.obs_mode);
             if Some(&state) != last.as_ref() {
                 if !state.is_empty() {
                     *self.obs_live.lock().unwrap() = Some(state == "live");
                     self.jukebox.changed();
                 }
                 match state.as_str() {
+                    // старий запис «live» (від минулого запуску, аварійного закриття OBS, першої версії)
+                    // музику не вмикає: лише свіжий, щойно записаний скриптом OBS
+                    "live" if !fresh => {
+                        tracing::info!("OBS: у data/obs_state застарілий запис про трансляцію — ігнорую");
+                        *self.obs_live.lock().unwrap() = None;
+                    }
                     "live" => {
                         obs_seen = true;
                         tracing::info!("OBS: трансляцію розпочато");
@@ -599,5 +618,30 @@ impl Bot {
             let player = vals.get(1).map(|v| format!("{v:.1}%")).unwrap_or_else(|| "не грає".into());
             tracing::info!("Навантаження на процесор: бот {:.1}%, програвач {player}", vals.first().copied().unwrap_or(0.0));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_obs_state_never_counts_as_live() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("obs_state");
+        let start = std::time::SystemTime::now() - Duration::from_secs(1);
+        // запис від минулого запуску (година тому): у режимі OBS — ігнор
+        std::fs::write(&p, format!("live {}", now_secs() as u64 - 3600)).unwrap();
+        let old = std::time::SystemTime::now() - Duration::from_secs(3600);
+        let f = std::fs::File::options().write(true).open(&p).unwrap();
+        f.set_modified(old).unwrap();
+        assert_eq!(read_obs_state(&p, start, true), (String::new(), false));
+        assert_eq!(read_obs_state(&p, start, false), (String::new(), false));
+        // свіжий запис скрипта OBS
+        std::fs::write(&p, format!("live {}", now_secs() as u64)).unwrap();
+        assert_eq!(read_obs_state(&p, start, true), ("live".into(), true));
+        // записано після старту бота, але давно не оновлювалось (старий скрипт без «пульсу»)
+        std::fs::write(&p, format!("live {}", now_secs() as u64 - 60)).unwrap();
+        assert_eq!(read_obs_state(&p, start, false), ("live".into(), false));
     }
 }

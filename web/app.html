@@ -561,8 +561,10 @@
     $("playIcon").innerHTML = s.status === "paused" ? icons.play : icons.pause;
     $("playBtn").setAttribute("aria-label", s.status === "paused" ? "Продовжити" : "Пауза");
     $("onair").checked = !!s.active;
-    $("onairHint").textContent = s.active ? (s.status === "idle" ? "Увімкнено — чекаю на замовлення" : "Грає в ефірі")
-      : (s.health && s.health.obs_live === false ? "Вимкнено — увімкнеться з початком трансляції" : "Вимкнено");
+    // сама музика вмикається лише з трансляцією; без неї перемикач — тестовий режим (для віджета)
+    $("onairHint").textContent = s.active
+      ? (s.streaming ? (s.status === "idle" ? "В ефірі — чекаю на замовлення" : "Грає в ефірі") : "Тестовий режим — грає без трансляції")
+      : "Вимкнено — увімкнеться з початком трансляції";
     if (!volDrag) { $("vol").value = s.volume; $("volv").textContent = s.volume; }
     const artistNow = n ? mainArtist(n.artist) : "";
     $("banArtistNow").hidden = !artistNow;

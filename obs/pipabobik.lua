@@ -5,7 +5,8 @@
   Скрипт:
     • запускає бота при старті OBS (або при старті трансляції — на вибір);
     • повідомляє боту, коли трансляція почалась / закінчилась
-      (музика грає лише під час стріму, після нього — пауза, черга зберігається);
+      (музика сама грає лише під час стріму, після нього — пауза, черга зберігається);
+      сам скрипт трансляцію НЕ запускає і не зупиняє;
     • закриває бота разом з OBS.
   Зв'язок з ботом — через файл data/obs_state (без вікон і консолей).
 ]]
@@ -16,6 +17,7 @@ local bot_dir = ""
 local mode = "obs"
 local open_panel = true
 local launched = false
+local current = nil -- останній записаний стан
 local is_windows = package.config:sub(1, 1) == "\\"
 
 local function sep() return is_windows and "\\" or "/" end
@@ -31,6 +33,7 @@ local function file_exists(p)
 end
 
 local function write_state(state)
+	current = state
 	if bot_dir == "" then return end
 	local f = io.open(path(bot_dir, "data", "obs_state"), "w")
 	if f then
@@ -81,6 +84,14 @@ local function launch_panel()
 	if run("") then
 		obs.script_log(obs.LOG_INFO, "pipabobik: відкриваю панель керування")
 	end
+end
+
+-- «пульс»: кожні 3 секунди підтверджуємо боту справжній стан трансляції.
+-- Бот вмикає музику лише за свіжим записом, тож старий «live» (після аварійного
+-- закриття OBS чи від іншої копії бота) музику не ввімкне.
+local function heartbeat()
+	if current == "exit" then return end
+	write_state(obs.obs_frontend_streaming_active() and "live" or "idle")
 end
 
 local function on_event(event)
@@ -143,6 +154,7 @@ end
 function script_load(settings)
 	script_update(settings)
 	obs.obs_frontend_add_event_callback(on_event)
+	obs.timer_add(heartbeat, 3000)
 	if obs.obs_frontend_streaming_active() then
 		write_state("live")
 		launch(true)
@@ -155,5 +167,6 @@ function script_load(settings)
 end
 
 function script_unload()
+	obs.timer_remove(heartbeat)
 	write_state("exit")
 end

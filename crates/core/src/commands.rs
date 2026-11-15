@@ -311,8 +311,8 @@ impl Commands {
 
     async fn cmd_play(&self, m: &ChatMessage) {
         if !self.jb.is_active() {
-            self.jb.activate();
-            return self.reply(m, "▶ музику ввімкнено").await;
+            // музика вмикається з початком трансляції (або вручну в застосунку — тестовий режим)
+            return self.reply(m, "музика вмикається разом із трансляцією 🎬").await;
         }
         if self.jb.player.paused() {
             self.jb.set_pause(false).await;
