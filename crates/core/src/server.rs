@@ -219,6 +219,7 @@ async fn app_page(State(bot): S, Query(q): Query<KeyQ>) -> Response {
         let key = q.key.unwrap_or_default();
         return Redirect::temporary(&format!("/setup?key={}", urlencoding::encode(&key))).into_response();
     }
+    bot.updates.check_soon();
     page(APP_HTML)
 }
 

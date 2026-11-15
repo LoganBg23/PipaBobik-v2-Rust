@@ -26,7 +26,9 @@ use crate::track::now_secs;
 pub const REPO: &str = "LoganBg23/PipaBobik-v2-Rust";
 pub const ASSET: &str = "PipaBobik-windows-x64.zip";
 pub const EXE: &str = if cfg!(windows) { "PipaBobik.exe" } else { "pipabobik" };
-const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
+const CHECK_EVERY: Duration = Duration::from_secs(3600);
+/// Відкрили застосунок — перевіряємо, якщо востаннє дивились давніше, ніж стільки секунд тому.
+const CHECK_ON_OPEN_AFTER: f64 = 600.0;
 const KEEP: &[&str] = &["config.toml", "cookies.txt"];
 const KEEP_DIRS: &[&str] = &["data", "bin", ".git", "target"];
 
@@ -221,6 +223,21 @@ impl Updater {
             }
         }
         self.available()
+    }
+
+    /// Застосунок відкрили: якщо давно не перевіряли — тихо дивимось GitHub зараз,
+    /// щоб нова версія з'явилась одразу, а не через годину.
+    pub fn check_soon(self: &Arc<Self>) {
+        let stale = now_secs() - self.s.lock().unwrap().checked_at > CHECK_ON_OPEN_AFTER;
+        if !stale || self.state() != "idle" {
+            return;
+        }
+        let me = self.clone();
+        tokio::spawn(async move {
+            if me.check().await {
+                me.prefetch().await;
+            }
+        });
     }
 
     pub async fn run_loop(self: Arc<Self>) {
