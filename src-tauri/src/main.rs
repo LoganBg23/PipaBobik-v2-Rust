@@ -4,7 +4,8 @@
 //!   PipaBobik.exe --bot [--obs] [--live] [--paused] [-v]
 //!                                — сам бот без вікна (так його запускає скрипт OBS);
 //!   PipaBobik.exe --apply-update …
-//!                                — встановлення оновлення (запускає бот, людині не потрібно).
+//!                                — встановлення оновлення (запускає бот, людині не потрібно);
+//!   PipaBobik.exe --uninstall    — видалити pipabobik (ярлик «Видалити pipabobik»).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::io::{Read, Write};
@@ -17,6 +18,7 @@ use std::time::{Duration, Instant};
 use pipabobik_core::app::{open_url, setup_logging, Bot, BotOptions};
 use pipabobik_core::config::{load_config, Config};
 use pipabobik_core::system::ObsWatch;
+use pipabobik_core::uninstall::{self, ask, Answer, Buttons};
 use pipabobik_core::{paths, proc, updater};
 use tauri::webview::NewWindowResponse;
 use tauri::window::Color;
@@ -32,6 +34,12 @@ fn main() {
     }
     if has("--apply-update") {
         std::process::exit(apply_update(&args));
+    }
+    if has("--uninstall-run") {
+        std::process::exit(uninstall_run(&args));
+    }
+    if has("--uninstall") {
+        std::process::exit(uninstall());
     }
     let bot_flags = ["--bot", "--obs", "--live", "--paused", "--restart"];
     if args.iter().any(|a| bot_flags.contains(&a.as_str())) {
@@ -141,6 +149,8 @@ fn is_local(url: &Url) -> bool {
 
 fn run_panel() {
     let port = port();
+    // ярлики в меню «Пуск» (і «Видалити pipabobik») та запис у «Параметри → Програми»
+    std::thread::spawn(uninstall::register_if_needed);
     let closing = Arc::new(AtomicBool::new(false));
     let closing_ev = closing.clone();
     let ctx = tauri::generate_context!();
@@ -288,4 +298,89 @@ fn edge_fallback(port: u16, why: &str) {
         }
     }
     open_url(&url);
+}
+
+// ── видалення ──
+
+const TITLE: &str = "Видалення pipabobik";
+
+/// Крок 1: питання, зупинка бота, передача роботи копії з TEMP.
+fn uninstall() -> i32 {
+    let root = paths::root().to_path_buf();
+    if !uninstall::looks_installed(&root) {
+        ask(TITLE, &format!("Не бачу pipabobik у папці\n{}", root.display()), Buttons::Ok);
+        return 1;
+    }
+    let sure = ask(
+        TITLE,
+        &format!("Видалити pipabobik з комп'ютера?\n\nПапка: {}\nБот, застосунок, ярлики й запис у «Програмах» буде видалено.", root.display()),
+        Buttons::YesNo,
+    );
+    if sure != Answer::Yes {
+        return 0;
+    }
+    let keep = match ask(
+        TITLE,
+        "Залишити налаштування й дані?\n\n«Так» — config.toml і папка data (черга, бан-лист, лайки, вхід у Twitch) залишаться, і наступне встановлення в цю папку їх підхопить.\n\n«Ні» — видалити все.",
+        Buttons::YesNoCancel,
+    ) {
+        Answer::Yes => true,
+        Answer::No => false,
+        Answer::Cancel => return 0,
+    };
+    // зупиняємо бота (черга зберігається), вікно застосунку й програвач
+    let port = port();
+    if bot_running(port) {
+        shutdown_bot(port, &read_key());
+    }
+    uninstall::kill_other_instances(&root);
+    pipabobik_core::system::kill_orphan_players();
+    let copy = match uninstall::temp_copy() {
+        Ok(c) => c,
+        Err(e) => {
+            ask(TITLE, &format!("Не вдалося почати видалення: {e}"), Buttons::Ok);
+            return 1;
+        }
+    };
+    let mut a = vec!["--uninstall-run".to_string(), "--target".into(), root.to_string_lossy().into_owned(), "--pid".into(), std::process::id().to_string()];
+    if keep {
+        a.push("--keep-data".into());
+    }
+    let tmp = std::env::temp_dir();
+    if let Err(e) = proc::spawn_detached(&copy, &a, &tmp) {
+        ask(TITLE, &format!("Не вдалося почати видалення: {e}"), Buttons::Ok);
+        return 1;
+    }
+    0
+}
+
+/// Крок 2 (копія з TEMP): ярлики, реєстр, файли, повідомлення, самовидалення.
+fn uninstall_run(args: &[String]) -> i32 {
+    let root = PathBuf::from(arg_value(args, "--target"));
+    let keep = args.iter().any(|a| a == "--keep-data");
+    if !uninstall::looks_installed(&root) {
+        return 1;
+    }
+    let pid: u32 = arg_value(args, "--pid").parse().unwrap_or(0);
+    let _ = updater::wait_pid(pid, Duration::from_secs(15), &std::env::temp_dir());
+    uninstall::kill_other_instances(&root);
+    std::thread::sleep(Duration::from_millis(800)); // Windows відпускає файли не миттєво
+    uninstall::run_powershell(&uninstall::unregister_script(&root.join(updater::EXE)));
+    let mut res = uninstall::remove_files(&root, keep);
+    if !res.failed.is_empty() {
+        // файл міг бути ще зайнятий — друга спроба
+        std::thread::sleep(Duration::from_secs(2));
+        res = uninstall::remove_files(&root, keep);
+    }
+    let mut text = String::from(if res.failed.is_empty() { "pipabobik видалено." } else { "pipabobik видалено не повністю." });
+    if keep && !res.folder_removed {
+        text += &format!("\n\nНалаштування й дані залишились у папці:\n{}", root.display());
+    }
+    if !res.failed.is_empty() {
+        text += &format!("\n\nНе вдалося видалити (видаліть вручну):\n{}", res.failed.iter().take(5).cloned().collect::<Vec<_>>().join("\n"));
+    }
+    text += "\n\nВ OBS приберіть скрипт pipabobik.lua: Інструменти → Скрипти → pipabobik.lua → «−».\n\nmpv, Deno і yt-dlp залишились: якщо вони вам не потрібні, видаліть їх у «Параметри → Програми».";
+    ask(TITLE, &text, Buttons::Ok);
+    uninstall::delete_self_later();
+    0
 }

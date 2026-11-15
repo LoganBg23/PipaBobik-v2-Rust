@@ -17,4 +17,5 @@ pub mod server;
 pub mod system;
 pub mod track;
 pub mod twitch;
+pub mod uninstall;
 pub mod updater;
