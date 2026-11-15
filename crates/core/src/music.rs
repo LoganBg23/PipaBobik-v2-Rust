@@ -199,6 +199,10 @@ pub fn find_ytdlp() -> Option<PathBuf> {
 }
 
 pub fn find_deno() -> Option<PathBuf> {
+    let own = paths::bin_dir().join(if cfg!(windows) { "deno.exe" } else { "deno" });
+    if own.is_file() {
+        return Some(own);
+    }
     if let Some(p) = paths::which("deno") {
         return Some(p);
     }
@@ -230,7 +234,16 @@ pub struct MusicSource {
     pub cache_dir: PathBuf,
     me: std::sync::OnceLock<std::sync::Weak<MusicSource>>,
     refreshing: Mutex<std::collections::HashSet<String>>,
+    /// Deno: yt-dlp без нього не розв'язує захист YouTube, і посилання на звук відповідають 403.
+    deno: Mutex<Option<PathBuf>>,
+    /// До цього часу звук береться запасним способом (без входу Google, клієнт без JS):
+    /// звичайні посилання щойно не відтворились.
+    alt_until: Mutex<f64>,
 }
+
+/// Запасний спосіб отримати звук: без cookies, клієнт android_vr не потребує ні JS, ні PO-токена.
+const ALT_EXTRACTOR_ARGS: &str = "youtube:player_client=android_vr,default;skip=hls,dash,translated_subs";
+const ALT_FOR: f64 = 3600.0;
 
 /// Збережений плейлист: коли збережено і треки (не більше PLAYLIST_LIMIT).
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -297,6 +310,8 @@ impl MusicSource {
             cache_dir: paths::data_dir().join("cache"),
             me: std::sync::OnceLock::new(),
             refreshing: Mutex::new(Default::default()),
+            deno: Mutex::new(find_deno()),
+            alt_until: Mutex::new(0.0),
         }
     }
 
@@ -444,6 +459,46 @@ impl MusicSource {
         }
     }
 
+    /// Deno потрібен yt-dlp, щоб YouTube віддавав робочі посилання на звук. Немає — завантажуємо в bin/.
+    pub async fn ensure_deno(&self) {
+        if self.deno.lock().unwrap().is_some() || !cfg!(windows) {
+            return;
+        }
+        tracing::info!("Deno не знайдено — завантажую з GitHub (потрібен yt-dlp для YouTube)");
+        let zip = paths::bin_dir().join("deno-download.zip");
+        let _ = std::fs::create_dir_all(paths::bin_dir());
+        let url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip";
+        if let Err(e) = download(&self.http, url, &zip).await {
+            tracing::warn!("Не вдалося завантажити Deno: {e}. Встановіть: winget install -e --id DenoLand.Deno");
+            let _ = std::fs::remove_file(&zip);
+            return;
+        }
+        let dest = paths::bin_dir().join("deno.exe");
+        let res = tokio::task::spawn_blocking({
+            let (zip, dest) = (zip.clone(), dest.clone());
+            move || -> Result<(), String> {
+                let f = std::fs::File::open(&zip).map_err(|e| e.to_string())?;
+                let mut z = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;
+                let mut entry = z.by_name("deno.exe").map_err(|e| e.to_string())?;
+                let tmp = dest.with_extension("tmp");
+                let mut out = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+                std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+                drop(out);
+                std::fs::rename(&tmp, &dest).map_err(|e| e.to_string())
+            }
+        })
+        .await
+        .unwrap_or_else(|e| Err(e.to_string()));
+        let _ = std::fs::remove_file(&zip);
+        match res {
+            Ok(()) => {
+                tracing::info!("Deno встановлено: {}", dest.display());
+                *self.deno.lock().unwrap() = Some(dest);
+            }
+            Err(e) => tracing::warn!("Не вдалося розпакувати Deno: {e}"),
+        }
+    }
+
     /// Оновлює yt-dlp, якщо він наш (bin/) і не оновлювався тиждень.
     pub async fn self_update_ytdlp(&self) {
         let Some(exe) = self.ytdlp_path() else { return };
@@ -469,12 +524,19 @@ impl MusicSource {
 
     /// Запуск yt-dlp. Повертає stdout або текст помилки.
     async fn ytdlp(&self, args: &[&str], timeout: u64) -> Result<String, String> {
+        self.ytdlp_with(args, timeout, false).await
+    }
+
+    /// alt — запасний спосіб: без входу Google і з клієнтом YouTube, якому не потрібен JS.
+    async fn ytdlp_with(&self, args: &[&str], timeout: u64, alt: bool) -> Result<String, String> {
         let exe = self.ensure_ytdlp().await.ok_or_else(|| "yt-dlp не знайдено".to_string())?;
-        self.refresh_cookies(false).await;
+        if !alt {
+            self.refresh_cookies(false).await;
+        }
         let _slot = self.slots.acquire().await.map_err(|e| e.to_string())?;
         // кожен запуск — зі своєю копією cookies: yt-dlp переписує файл наприкінці, і два одночасні запуски могли б його зіпсувати
         let mut tmp_cookie = None;
-        if let Some(src) = self.cookie_source() {
+        if let Some(src) = self.cookie_source().filter(|_| !alt) {
             let n = self.tmp_seq.fetch_add(1, Ordering::Relaxed);
             let tmp = paths::data_dir().join("tmp").join(format!("ck-{}-{n}.txt", std::process::id()));
             let _ = std::fs::create_dir_all(tmp.parent().unwrap());
@@ -483,7 +545,17 @@ impl MusicSource {
             }
         }
         let mut cmd = hidden(&exe);
-        cmd.args(["--ignore-config", "--no-warnings", "--socket-timeout", "15", "--extractor-args", "youtube:skip=hls,dash,translated_subs"]);
+        let xargs = if alt { ALT_EXTRACTOR_ARGS } else { "youtube:skip=hls,dash,translated_subs" };
+        cmd.args(["--ignore-config", "--no-warnings", "--socket-timeout", "15", "--extractor-args", xargs]);
+        // Deno у PATH: yt-dlp сам його знаходить і розв'язує захист YouTube (будь-яка версія yt-dlp)
+        if let Some(dir) = self.deno.lock().unwrap().as_ref().and_then(|d| d.parent().map(Path::to_path_buf)) {
+            let path = std::env::var_os("PATH").unwrap_or_default();
+            let mut parts = vec![dir];
+            parts.extend(std::env::split_paths(&path));
+            if let Ok(joined) = std::env::join_paths(parts) {
+                cmd.env("PATH", joined);
+            }
+        }
         if let Some(c) = &tmp_cookie {
             cmd.arg("--cookies").arg(c);
         }
@@ -597,6 +669,7 @@ impl MusicSource {
     /// Готує все наперед, щоб перший «!трек» і перший трек не чекали на ініціалізацію.
     pub async fn warmup(&self) {
         self.ensure_ytdlp().await;
+        self.ensure_deno().await;
         self.refresh_cookies(false).await;
         self.self_update_ytdlp().await;
     }
@@ -631,13 +704,41 @@ impl MusicSource {
 
     /// Пряме посилання на аудіо і http-заголовки для mpv.
     pub async fn resolve_stream(&self, track: &Track) -> Option<(String, HashMap<String, String>, u64)> {
+        let alt = now_secs() < *self.alt_until.lock().unwrap();
+        self.resolve_stream_with(track, alt).await
+    }
+
+    /// Запасне посилання: коли звичайне не відтворилось у mpv.
+    pub async fn resolve_stream_alt(&self, track: &Track) -> Option<(String, HashMap<String, String>, u64)> {
+        self.resolve_stream_with(track, true).await
+    }
+
+    /// Звичайні посилання не грають — годину беремо звук запасним способом.
+    pub fn stream_failed(&self) {
+        let mut u = self.alt_until.lock().unwrap();
+        if now_secs() > *u {
+            tracing::warn!(
+                "Звук зі звичайного посилання не відтворюється — годину беру його без входу Google{}",
+                if self.deno.lock().unwrap().is_none() { " (Deno ще не встановлено)" } else { "" }
+            );
+        }
+        *u = now_secs() + ALT_FOR;
+    }
+
+    async fn resolve_stream_with(&self, track: &Track, alt: bool) -> Option<(String, HashMap<String, String>, u64)> {
         let url = track.url();
-        let v = self
-            .ytdlp_json(
-                &["--no-playlist", "-f", "bestaudio[acodec=opus]/bestaudio/best", "-O", "%(.{url,duration,http_headers,requested_formats})j", &url],
-                60,
-            )
-            .await?;
+        let args = ["--no-playlist", "-f", "bestaudio[acodec=opus]/bestaudio/best", "-O", "%(.{url,duration,http_headers,requested_formats})j", url.as_str()];
+        let v = if alt {
+            match self.ytdlp_with(&args, 60, true).await {
+                Ok(out) => out.lines().rev().find(|l| l.trim_start().starts_with('{')).and_then(|l| serde_json::from_str::<Value>(l).ok()),
+                Err(e) => {
+                    tracing::warn!("yt-dlp (запасний спосіб): {}", first_line(&e));
+                    None
+                }
+            }
+        } else {
+            self.ytdlp_json(&args, 60).await
+        }?;
         let link = v["url"].as_str().or_else(|| v["requested_formats"][0]["url"].as_str())?.to_string();
         let headers = v["http_headers"].as_object().map(|m| m.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect()).unwrap_or_default();
         Some((link, headers, v["duration"].as_f64().unwrap_or(0.0) as u64))

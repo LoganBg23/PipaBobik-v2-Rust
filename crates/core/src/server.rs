@@ -118,6 +118,7 @@ pub fn router(bot: Arc<Bot>) -> Router {
         .route("/api/errors", get(api_errors_get).post(api_errors_set))
         .route("/api/playlists", get(api_playlists_get).post(api_playlists_set))
         .route("/api/access", get(api_access_get).post(api_access_set))
+        .route("/api/messages", get(api_messages_get).post(api_messages_set))
         .route("/api/setup", get(api_setup_get).post(api_setup_set))
         .route("/api/check", axum::routing::post(api_check))
         .route("/api/state", get(api_state))
@@ -702,6 +703,76 @@ fn access_payload_full(bot: &Bot) -> Value {
     let mut v = access_payload(bot);
     v["help"]["preview"] = json!(bot.commands.help_preview());
     v
+}
+
+// ── тексти повідомлень у чат ──
+fn messages_payload(bot: &Bot) -> Value {
+    let cfg = bot.cfg.read().unwrap();
+    let req = cfg.commands("request").into_iter().next().unwrap_or_else(|| "!трек".into());
+    let now = cfg.commands("now").into_iter().next().unwrap_or_else(|| "!шоце".into());
+    // приклад того, що побачить чат
+    let sample: Vec<(&str, String)> = vec![
+        ("трек", "Go_A — Шум".into()),
+        ("тривалість", "3:01".into()),
+        ("місце", "2".into()),
+        ("коли", "заграє через ~4 хв".into()),
+        ("позиція", "1:12".into()),
+        ("хто", "замовив(ла) @pipa_fan".into()),
+        ("посилання", "https://music.youtube.com/watch?v=…".into()),
+        ("список", "1) Go_A — Шум (@pipa_fan) · 2) KAZKA — Плакала (@kotyk_ua)".into()),
+        ("кількість", "2".into()),
+        ("гучність", "60".into()),
+        ("виконавець", "KAZKA".into()),
+        ("прибрано", ", з черги прибрано треків: 1".into()),
+        ("запит", "шум гоа".into()),
+        ("нік", "pipa_fan".into()),
+        ("замовити", req),
+        ("щограє", now),
+    ];
+    let items: Vec<Value> = crate::messages::MESSAGES
+        .iter()
+        .map(|m| {
+            json!({
+                "key": m.key,
+                "label": m.label,
+                "default": m.default,
+                "vars": m.vars,
+                "text": cfg.str("messages", m.key),
+                "preview": crate::messages::render(&cfg, m.key, &sample),
+            })
+        })
+        .collect();
+    json!({ "items": items, "max": crate::messages::MAX_LEN })
+}
+
+async fn api_messages_get(State(bot): S, h: HeaderMap) -> Response {
+    guard!(bot, h);
+    Json(messages_payload(&bot)).into_response()
+}
+
+/// {"messages": {"skip": "текст"}} — порожній текст повертає стандартний.
+async fn api_messages_set(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
+    guard!(bot, h);
+    let d: Value = serde_json::from_slice(&b).unwrap_or(Value::Null);
+    let mut upd = Map::new();
+    for (k, v) in d["messages"].as_object().into_iter().flatten() {
+        if crate::messages::find(k).is_none() {
+            continue;
+        }
+        let t: String = as_str(v).trim().chars().take(crate::messages::MAX_LEN).collect();
+        upd.insert(k.clone(), json!(t));
+    }
+    if !upd.is_empty() {
+        {
+            let mut cfg = bot.cfg.write().unwrap();
+            for (k, v) in &upd {
+                cfg.set("messages", k, v.clone());
+            }
+        }
+        bot.save_config(&[("messages".into(), upd)]);
+        tracing::info!("Тексти повідомлень змінено з застосунку");
+    }
+    Json(messages_payload(&bot)).into_response()
 }
 
 async fn api_access_get(State(bot): S, h: HeaderMap) -> Response {

@@ -387,7 +387,7 @@ pub const STEPS: &[(&str, &str)] = &[
     ("wait", "Закриваю pipabobik"),
     ("download", "Завантажую з GitHub"),
     ("verify", "Перевіряю архів"),
-    ("obs", "Закриваю OBS"),
+    ("obs", "OBS не закриваю"),
     ("backup", "Резервна копія"),
     ("files", "Замінюю файли"),
     ("launch", "Запускаю знову"),
@@ -652,7 +652,7 @@ pub async fn run_job(job: UpdateJob, http: reqwest::Client, emit: impl Fn(Ev) + 
                 emit(Ev::Step("obs", "skip", "OBS не закрився — продовжую без нього".into()));
             }
         } else {
-            emit(Ev::Step("obs", "skip", "OBS не чіпаю (трансляція або OBS не відкрито)".into()));
+            emit(Ev::Step("obs", "skip", "OBS не закриваю — оновлюється лише pipabobik".into()));
         }
 
         // 5–6. резервна копія і заміна

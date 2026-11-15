@@ -31,6 +31,12 @@ pub type Stream = (String, HashMap<String, String>, u64);
 /// Звідки брати аудіо (у тестах — підробка).
 pub trait Source: Send + Sync + 'static {
     fn resolve_stream<'a>(&'a self, t: &'a Track) -> BoxFut<'a, Option<Stream>>;
+    /// Запасне посилання, коли звичайне не відтворилось.
+    fn resolve_stream_alt<'a>(&'a self, _t: &'a Track) -> BoxFut<'a, Option<Stream>> {
+        Box::pin(async { None })
+    }
+    /// Звичайне посилання не відтворилось — далі якийсь час брати запасні.
+    fn stream_failed(&self) {}
     fn playlist<'a>(&'a self, pl: &'a str, shuffle: bool) -> BoxFut<'a, Vec<Track>>;
     fn rate<'a>(&'a self, video_id: &'a str, like: bool) -> BoxFut<'a, Result<(), MusicError>>;
 }
@@ -52,6 +58,12 @@ pub trait Playback: Send + Sync + 'static {
 impl Source for MusicSource {
     fn resolve_stream<'a>(&'a self, t: &'a Track) -> BoxFut<'a, Option<Stream>> {
         Box::pin(MusicSource::resolve_stream(self, t))
+    }
+    fn resolve_stream_alt<'a>(&'a self, t: &'a Track) -> BoxFut<'a, Option<Stream>> {
+        Box::pin(MusicSource::resolve_stream_alt(self, t))
+    }
+    fn stream_failed(&self) {
+        MusicSource::stream_failed(self)
     }
     fn playlist<'a>(&'a self, pl: &'a str, shuffle: bool) -> BoxFut<'a, Vec<Track>> {
         Box::pin(MusicSource::playlist(self, pl, shuffle))
@@ -972,8 +984,10 @@ impl Jukebox {
         }
         self.changed();
         if self.announce.load(std::sync::atomic::Ordering::Relaxed) {
-            let who = if track.source == "request" { format!(" · замовив(ла) @{}", track.requested_by) } else { String::new() };
-            self.say(format!("🎶 Грає {}{who}", track.label())).await;
+            let who = if track.source == "request" { format!("замовив(ла) @{}", track.requested_by) } else { "з плейлиста стримерки".to_string() };
+            let dur = if track.duration > 0 { crate::track::fmt_time(track.duration as f64) } else { String::new() };
+            let text = crate::messages::render(&self.cfg.read().unwrap(), "announce", &[("трек", track.label()), ("хто", who), ("тривалість", dur), ("посилання", track.url())]);
+            self.say(text).await;
         }
         tracing::info!("▶ {} [{}]", track.label(), track.source);
         self.prefetch();
@@ -1010,8 +1024,26 @@ impl Jukebox {
             headers = h;
             start = (played - 2.0).max(0.0);
         }
+        // посилання не відтворилось зовсім — пробуємо запасне (без входу Google, інший клієнт YouTube)
+        if outcome == Outcome::Error && !self.is_skipped(id) && self.is_active() {
+            let err = self.player.last_error();
+            tracing::warn!("{}: mpv не відтворив ({}) — пробую запасне посилання", track.label(), if err.is_empty() { "без пояснень" } else { &err });
+            self.music.stream_failed();
+            // уже підготовлені звичайні посилання теж, найімовірніше, не грають
+            self.st.lock().unwrap().streams.clear();
+            if let Some((u, h, _)) = self.music.resolve_stream_alt(&track).await {
+                if !self.is_skipped(id) && self.is_active() {
+                    outcome = self.player.play(&u, &h, 0.0).await;
+                    if outcome == Outcome::Error {
+                        let err = self.player.last_error();
+                        tracing::error!("{} не відтворився і з запасного посилання: {}", track.label(), if err.is_empty() { "mpv без пояснень" } else { &err });
+                    }
+                }
+            }
+        }
         if outcome == Outcome::Error && track.source == "request" {
-            self.say(format!("@{} {} не відтворився — пропускаю 😔", track.requested_by, track.label())).await;
+            let text = crate::messages::render(&self.cfg.read().unwrap(), "failed", &[("нік", track.requested_by.clone()), ("трек", track.label())]);
+            self.say(text).await;
         }
         {
             let mut st = self.st.lock().unwrap();

@@ -159,7 +159,8 @@ impl Player {
 
     pub fn command_args(&self, url: &str, headers: &HashMap<String, String>, start: f64) -> Vec<String> {
         let volume = self.volume();
-        let mut cmd: Vec<String> = vec!["--no-video".into(), "--no-terminal".into()];
+        // не --no-terminal: він глушить і повідомлення про помилки, а без них не зрозуміло, чому трек не грає
+        let mut cmd: Vec<String> = vec!["--no-video".into(), "--quiet".into(), "--input-terminal=no".into(), "--msg-level=all=error".into()];
         if self.show_window {
             cmd.extend(["--force-window=yes", "--window-minimized=yes", "--geometry=320x80"].map(String::from));
         } else {
@@ -275,7 +276,7 @@ impl Player {
         }
         let ok = status.map(|s| s.success()).unwrap_or(false);
         if !ok && played - start < 3.0 {
-            tracing::warn!("mpv завершився з помилкою: {err}");
+            tracing::warn!("mpv завершився з помилкою: {}", if err.is_empty() { "без пояснень" } else { &err });
             return Outcome::Error;
         }
         Outcome::Ended

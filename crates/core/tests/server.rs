@@ -179,3 +179,20 @@ async fn first_run_opens_setup() {
     assert_eq!(st["configured"], false);
     assert!(st["redirect"].as_str().unwrap().ends_with("/auth/callback"));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_messages_are_editable() {
+    let t = T::new(CONFIGURED).await;
+    let (s, v) = t.get("/api/messages").await;
+    assert_eq!(s, 200);
+    let skip = v["items"].as_array().unwrap().iter().find(|i| i["key"] == "skip").unwrap().clone();
+    assert_eq!(skip["preview"], "⏭ скіпнуто Go_A — Шум");
+    let (_, v) = t.post("/api/messages", json!({"messages": {"skip": "пропускаємо {трек} 🙃", "нема": "x"}})).await;
+    let skip = v["items"].as_array().unwrap().iter().find(|i| i["key"] == "skip").unwrap().clone();
+    assert_eq!(skip["preview"], "пропускаємо Go_A — Шум 🙃");
+    assert!(std::fs::read_to_string(t.bot.cfg.read().unwrap().path.clone()).unwrap().contains("пропускаємо {трек}"));
+    // порожній — знову стандартний
+    let (_, v) = t.post("/api/messages", json!({"messages": {"skip": ""}})).await;
+    let skip = v["items"].as_array().unwrap().iter().find(|i| i["key"] == "skip").unwrap().clone();
+    assert_eq!(skip["preview"], "⏭ скіпнуто Go_A — Шум");
+}

@@ -73,6 +73,8 @@
   }
   .by svg { flex: none; width: 12px; height: 12px; fill: currentColor; }
   .by[hidden] { display: none; }
+  .by .i-pl, .by.pl .i-req { display: none; }
+  .by.pl .i-pl { display: block; }
 
   .progress { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-top: 7px; }
   .time { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .78); font-variant-numeric: tabular-nums; min-width: 30px; }
@@ -106,7 +108,7 @@
       <div class="titleWrap fits" id="titleWrap"><span class="title" id="title"></span></div>
       <div class="sub">
         <span class="artist" id="artist"></span>
-        <span class="by" id="by" hidden><svg viewBox="0 0 24 24"><path d="M12 3a8 8 0 00-8 8v6a3 3 0 003 3h1v-7H6v-2a6 6 0 0112 0v2h-2v7h1a3 3 0 003-3v-6a8 8 0 00-8-8z"/></svg><span id="byName"></span></span>
+        <span class="by" id="by" hidden><svg class="i-req" viewBox="0 0 24 24"><path d="M12 3a8 8 0 00-8 8v6a3 3 0 003 3h1v-7H6v-2a6 6 0 0112 0v2h-2v7h1a3 3 0 003-3v-6a8 8 0 00-8-8z"/></svg><svg class="i-pl" viewBox="0 0 24 24"><path d="M3 5h12v2H3zm0 5h12v2H3zm0 5h8v2H3zm14-10h4v2h-2v9.5a3 3 0 11-2-2.83z"/></svg><span id="byName"></span></span>
       </div>
       <div class="progress">
         <span class="time" id="cur">0:00</span>
@@ -237,9 +239,11 @@
     $("title").textContent = now.title;
     $("artist").textContent = now.artist || "";
     $("dur").textContent = now.duration ? fmt(now.duration) : "";
+    // замовлення — нік глядача; фонова музика — «з плейлиста стримерки»
     const by = now.source === "request" && now.requested_by;
-    $("by").hidden = !by;
-    $("byName").textContent = by ? now.requested_by : "";
+    $("by").hidden = !by && now.source !== "fallback";
+    $("by").classList.toggle("pl", !by);
+    $("byName").textContent = by ? now.requested_by : "з плейлиста стримерки";
     setCover(now);
     requestAnimationFrame(fitTitle);
   }

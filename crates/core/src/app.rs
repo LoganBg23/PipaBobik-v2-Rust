@@ -257,7 +257,7 @@ impl Bot {
         st["errors"] = ERRORS.summary();
         st["update"] = self.updates.summary();
         st["streaming"] = json!(obs == Some(true));
-        st["obs_restart"] = json!(obs == Some(false)); // оновлення може перезапустити OBS (трансляція не йде)
+        st["obs_restart"] = json!(false); // оновлення OBS не чіпає
         st["boot"] = json!(self.boot); // змінюється після перезапуску — застосунок оновить сторінку
         st["fallback"] = json!(playlist_id(&self.cfg.read().unwrap().str("google", "fallback_playlist")).unwrap_or_default());
         st["widget"] = json!({"pink": self.cfg.read().unwrap().bool("widget", "pink")}); // віджет завжди рожевий
@@ -343,14 +343,8 @@ impl Bot {
             return;
         };
         up.set("installing", "");
-        // OBS перезапускаємо лише коли точно знаємо, що трансляція не йде
-        let (mut obs_pid, mut obs_exe) = (0u32, String::new());
-        if self.obs_live() == Some(false) && self.obs.running() {
-            if let (Some(pid), Some(exe)) = (self.obs.pid(), self.obs.exe()) {
-                obs_pid = pid;
-                obs_exe = exe;
-            }
-        }
+        // OBS ніколи не закриваємо: оновлюється й перезапускається лише сам pipabobik
+        let (obs_pid, obs_exe) = (0u32, String::new());
         let tag = latest["tag"].as_str().unwrap_or("").to_string();
         let message = latest["message"].as_str().unwrap_or("").to_string();
         // запущений PipaBobik.exe не можна замінити — оновлює його копія з TEMP
@@ -535,7 +529,7 @@ impl Bot {
     async fn greet(self: Arc<Self>) {
         let mut rx = self.chat.connected_rx();
         let _ = rx.wait_for(|c| *c).await;
-        let text = format!("🎀 pipabobik на місці! Замовляй музику: {} назва · що грає: {}", self.commands.first("request"), self.commands.first("now"));
+        let text = crate::messages::render(&self.cfg.read().unwrap(), "greet", &[("замовити", self.commands.first("request")), ("щограє", self.commands.first("now"))]);
         self.chat.say(&text, None).await;
     }
 

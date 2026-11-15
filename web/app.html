@@ -81,7 +81,9 @@
   .ib { position: relative; width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--pearl); flex: none; }
   .ib:hover { background: rgba(255, 255, 255, .08); }
   .ib:active { background: rgba(255, 255, 255, .05); }
-  .ib[aria-pressed="true"] { color: var(--hot); }
+  .ib[aria-pressed="true"] { color: var(--hot); background: rgba(255, 61, 154, .14); }
+  .ib[aria-pressed="true"] svg { fill: currentColor; fill-opacity: .25; }
+  .ib.heart[aria-pressed] { background: none; }
   .ib svg { width: 18px; height: 18px; }
   .ib:disabled { opacity: .4; cursor: default; background: none; }
   .dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--hot); box-shadow: 0 0 0 2px var(--night); }
@@ -166,10 +168,12 @@
   .play:hover { background: #fff; }
   .play:active { transform: scale(.95); }
   .play svg { width: 20px; height: 20px; fill: currentColor; }
-  .skip { height: 40px; padding: 0 14px 0 10px; border-radius: 8px; background: rgba(255, 255, 255, .12); display: flex; align-items: center; gap: 6px; font-weight: 600; flex: none; }
+  .skip { width: 40px; height: 40px; justify-content: center; border-radius: 8px; background: rgba(255, 255, 255, .12); display: flex; align-items: center; gap: 6px; font-weight: 600; flex: none; }
   .skip:hover { background: rgba(255, 255, 255, .18); }
   .skip:disabled { opacity: .45; cursor: default; }
   .skip svg { width: 18px; height: 18px; fill: currentColor; }
+  .skip.ban svg { fill: none; }
+  .skip.ban:hover { background: rgba(196, 49, 75, .55); }
   .vol { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 6px; }
   .vol svg { width: 18px; height: 18px; }
   input[type=range] { flex: 1; min-width: 0; accent-color: var(--hot); }
@@ -207,11 +211,9 @@
   .list { list-style: none; }
 
   /* рядок треку */
-  .row { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; min-height: 56px; padding: 6px 8px; border-radius: 8px; }
+  .row { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; min-height: 56px; padding: 6px 8px; border-radius: 8px; }
   .row:hover, .row:focus-within { background: var(--raised); }
-  .row .cv { width: 40px; height: 40px; border-radius: 6px; background: var(--raised) center / cover;
-    /* жодна картинка не завантажилась — видно маленьку платівку */
-    background-color: #12030d; box-shadow: inset 0 0 0 13px #2d0b23, inset 0 0 0 14px var(--hot); }
+  .row .cv { width: 44px; height: 44px; border-radius: 6px; background: #2d0b23 center / cover no-repeat; overflow: hidden; }
   .row .tx { min-width: 0; }
   .row .tt { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row .aa { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -223,12 +225,17 @@
   .sq { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; background: var(--surface); color: var(--pearl); flex: none; }
   .sq:hover { background: var(--line); }
   .sq svg { width: 13px; height: 13px; fill: currentColor; }
-  .sq[data-banartist] svg { width: 16px; height: 16px; }
+  .sq[data-banartist] svg { width: 17px; height: 17px; fill: none; }
   .sq.heart svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
   .sq.heart.on { color: var(--hot); }
   .sq.heart.on svg { fill: currentColor; }
   .row .btn.sm { background: var(--surface); }
   .row .btn.sm.pri { background: var(--accent); }
+  .fb { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .08); font-size: 13px; color: var(--soft); cursor: pointer; }
+  .fb svg { width: 18px; height: 18px; }
+  .fb span { white-space: nowrap; }
+  .fb select { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: rgba(0, 0, 0, .25); color: var(--pearl); font-weight: 600; cursor: pointer; }
+  .fb select option { background: var(--surface); }
   .tail { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; min-height: 56px; padding: 6px 8px; color: var(--muted); font-size: 13px; }
   .tail .ph { width: 40px; height: 40px; border-radius: 6px; border: 1px dashed #6f4363; display: grid; place-items: center; }
   .tail .ph svg { width: 16px; height: 16px; }
@@ -255,7 +262,8 @@
   .set small { display: block; font-size: 12px; color: var(--muted); }
   .set svg { width: 20px; height: 20px; }
   .set .chev { width: 12px; height: 12px; color: var(--muted); }
-  .set.col { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px 14px; }
+  .set.col { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px 14px; }
+  .set > * { min-width: 0; }
   .set.off { opacity: .45; }
   .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #c4314b; color: #fff; font-size: 12px; font-weight: 600; display: grid; place-items: center; }
   .state-ok { font-size: 12px; color: var(--ok); white-space: nowrap; }
@@ -329,11 +337,20 @@
   .pls { list-style: none; display: flex; flex-direction: column; gap: 4px; }
   .pl { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 4px 4px 12px; border-radius: 6px; background: var(--night); }
   .pl .nm { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl > button { flex: none; }
   .pl .nm small { display: inline; margin-left: 6px; font-weight: 400; color: var(--muted); }
   .pl.on { box-shadow: inset 0 0 0 1px var(--hot); }
   .pl .tag { font-size: 12px; font-weight: 600; color: var(--hot); padding: 0 8px; }
   .addpl { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
   .addpl #plLink { grid-column: 1 / -1; }
+
+  /* тексти повідомлень */
+  .msg .mh { display: flex; align-items: baseline; gap: 8px; }
+  .msg .mh .lb { flex: 1; min-width: 0; }
+  .msg .vars { font-size: 12px; color: var(--muted); }
+  .msg .vars code { font: inherit; color: var(--blush); }
+  .msg .prev { padding: 6px 10px; border-radius: 6px; background: var(--night); font-size: 12.5px; color: var(--soft); word-break: break-word; }
+  .msg .prev b { color: #b78cff; font-weight: 600; }
 
   /* помилки */
   .errtools { display: flex; align-items: center; gap: 6px; padding: 0 0 10px; }
@@ -401,7 +418,7 @@
       <div class="grow"></div>
       <span id="winBtns" hidden style="display:contents">
         <button class="ib" id="pinBtn" aria-pressed="false" aria-label="Поверх усіх вікон" title="Поверх усіх вікон">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5M9 10l5 5"/></svg></button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-3 4h10l-3-4V3M12 13v8"/></svg></button>
         <button class="ib" id="miniBtn" aria-label="Міні-плеєр" title="Міні-плеєр у кутку екрана">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/></svg></button>
       </span>
@@ -438,12 +455,18 @@
       <div class="progress"><span id="cur">0:00</span><div class="bar" id="seekBar" role="slider" tabindex="0" aria-label="Перемотати" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div class="clip"><div class="fill" id="fill"></div></div><div class="kpos" id="kpos"><i class="knob"></i></div></div><span id="dur">0:00</span></div>
       <div class="controls">
         <button class="play" id="playBtn" aria-label="Пауза" title="Пауза (пробіл)"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
-        <button class="skip" data-act="skip" title="Пропустити трек"><svg viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg>Далі</button>
+        <button class="skip" data-act="skip" aria-label="Пропустити трек" title="Пропустити трек"><svg viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg></button>
+        <button class="skip ban" data-act="ban" aria-label="Заборонити трек і пропустити" title="Заборонити трек і пропустити"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg></button>
         <label class="vol" title="Гучність"><svg viewBox="0 0 24 24" fill="none" stroke="#e3c9d8" stroke-width="1.6" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 010 7"/></svg>
           <span class="sr">Гучність</span><input type="range" min="0" max="100" id="vol"><b id="volv"></b></label>
         <button class="ib" id="moreBtn" aria-label="Ще дії з треком" aria-haspopup="menu" title="Ще: заборонити трек чи виконавця, відкрити в YouTube Music">
           <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
       </div>
+      <label class="fb" for="fbSelect">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h12M3 11h12M3 16h7M16 14v6M16 14l5-1.5"/></svg>
+        <span id="fbLabel">Коли черга порожня</span>
+        <select id="fbSelect" aria-label="Фоновий плейлист, коли черга порожня"></select>
+      </label>
     </section>
 
     <form class="find" id="searchForm" role="search">
@@ -471,10 +494,6 @@
     <div class="list-wrap scroll">
       <div id="v-queue">
         <ol class="list" id="queue"></ol>
-        <div class="tail">
-          <div class="ph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#c592b2" stroke-width="1.6"><path d="M9 18V6l10-2v12M9 18a3 3 0 11-3-3 3 3 0 013 3zM19 16a3 3 0 11-3-3 3 3 0 013 3z"/></svg></div>
-          <div><label for="fbSelect" id="fbLabel">Потім — фоновий плейлист</label> <select id="fbSelect" aria-label="Фоновий плейлист, коли черга порожня"></select></div>
-        </div>
       </div>
       <div id="v-history" hidden><ul class="list" id="history"></ul></div>
       <div id="v-add" hidden><ul class="list" id="results"></ul>
@@ -516,9 +535,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM6 6l12 12"/></svg>
           <span><span class="lb">Фільтри й бан-лист</span><small id="hintBans">що не грати: російське, кліпи, заборонені треки</small></span>
           <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
-        <button class="set ico" data-go="pg-chat" data-k="чат повідомлення вітання трек">
+        <button class="set ico" data-go="pg-chat" data-k="чат повідомлення вітання трек текст відповіді шаблони">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v11H9l-5 4z"/></svg>
-          <span><span class="lb">Повідомлення в чат</span><small>про кожен трек, вітання на початку стріму</small></span>
+          <span><span class="lb">Повідомлення в чат</span><small>тексти відповідей на команди, про кожен трек, вітання</small></span>
           <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
       </div>
       <div class="gtitle">Система</div>
@@ -611,7 +630,7 @@
   <section class="screen" id="pg-playlists" hidden data-parent="scr-settings">
     <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Фонові плейлисти</h1></div>
     <div class="scroll"><div class="pad">
-      <p class="lead">Грають, коли черга порожня. Перемкнути можна й на головному екрані — під чергою.</p>
+      <p class="lead">Грають, коли черга порожня. Перемкнути можна й на головному екрані — під кнопками керування.</p>
       <div class="card">
         <div class="set col"><ul class="pls" id="plsList"></ul></div>
         <div class="set col"><span class="lb">Додати плейлист</span>
@@ -671,7 +690,9 @@
         <div class="set"><label for="greet_on_stream_start"><span class="lb">Вітатися на початку трансляції</span></label>
           <span class="switch"><input type="checkbox" id="greet_on_stream_start" data-key="chat.greet_on_stream_start"><span></span></span></div>
       </div>
-      <p class="lead" style="padding-top:12px">Текст відповіді на «!музика» — у «Командах й доступі».</p>
+      <div class="gtitle">Тексти повідомлень</div>
+      <p class="lead">Що бот пише в чат після кожної команди. У фігурних дужках — що бот підставить сам, наприклад <b style="color:var(--blush)">{трек}</b> чи <b style="color:var(--blush)">{нік}</b>. Очистите поле — повернеться стандартний текст. Відповідь на «!музика» — у «Командах й доступі».</p>
+      <div class="card" id="msgList"><div class="set"><span class="muted">Завантажую…</span></div></div>
     </div></div>
   </section>
 
@@ -735,7 +756,6 @@
   <a role="menuitem" id="mOpen" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg>Відкрити в YouTube Music</a>
   <button role="menuitem" id="mCopy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>Копіювати посилання</button>
   <hr>
-  <button role="menuitem" class="bad" data-act="ban"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg>Заборонити трек і пропустити</button>
   <button role="menuitem" class="bad" id="banArtistNow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4.5 20c.8-3.6 3.8-5.5 7.5-5.5 1.5 0 2.9.3 4 .9M16 16l5 5M21 16l-5 5"/></svg><span id="banArtistLabel">Заборонити виконавця</span></button>
 </div>
 
@@ -756,7 +776,7 @@
   const cssUrl = (u) => u ? `url("${String(u).replace(/"/g, "%22")}")` : "";
   const xIcon = '<svg viewBox="0 0 24 24"><path d="M6.4 5L5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>';
   const heartPath = '<path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.9 1.3-1.8 2.9-2.9 4.9-2.9 3.5 0 5.6 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/>';
-  const artistIcon = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6z"/><path d="M3 4.4L4.4 3 21 19.6 19.6 21z"/></svg>';
+  const artistIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.6-3.7 3.2-5.8 6.5-5.8 1.3 0 2.5.3 3.5.9M15.5 15.5l5 5M20.5 15.5l-5 5"/></svg>';
 
   // ── обкладинка: перевіряємо, що картинка справді є ──
   // Порядок: обкладинка треку → кадр з відео YouTube → лише платівка.
@@ -846,7 +866,9 @@
     $("deck").classList.toggle("nocover", !!n && !url);
     tintFrom(url);
   }
-  const thumbs = (t) => [t.cover, t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : ""].filter(Boolean).map(cssUrl).join(", ");
+  // обкладинка, під нею кадр з відео, а якщо жодна не завантажилась — маленька платівка
+  const VINYL = "radial-gradient(circle, #ff3d9a 0 3px, #12030d 3.5px 5px, #2d0b23 5.5px 100%)";
+  const thumbs = (t) => [t.cover, t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : ""].filter(Boolean).map(cssUrl).concat(VINYL).join(", ");
   let state = null, receivedAt = 0, currentId, volDrag = false;  // currentId спершу undefined — перший стан завжди малює картку
   paint(PINK);
 
@@ -910,6 +932,7 @@
     if (id === "pg-playlists") loadPlaylists();
     if (id === "pg-errors") loadErrors(true);
     if (id === "pg-accounts") renderAccounts();
+    if (id === "pg-chat") loadMessages();
     widgetPreview(id === "pg-obs");
     const f = $(id).querySelector("[data-back]") || $("q");
     if (id !== "scr-main" && f) f.focus({ preventScroll: true });
@@ -1058,7 +1081,7 @@
       : `<li class="empty">Тут з'являться треки, що вже відіграли.</li>`;
     const banned = s.banned || [];
     $("banned").innerHTML = banned.length ? banned.map((b) =>
-      `<li class="pl"><span class="nm">${esc(b.label)}</span><button class="btn sm" data-unban="${esc(b.video_id)}">Розбанити</button></li>`).join("")
+      `<li class="pl"><span class="nm" title="${esc(b.label)}">${esc(b.label)}</span><button class="btn sm" data-unban="${esc(b.video_id)}">Розбанити</button></li>`).join("")
       : `<li class="empty" style="padding:14px">Заборонених треків і виконавців немає.</li>`;
     $("hintBans").textContent = (s.banned || []).length ? `заборонено: ${banned.length}` : "що не грати: російське, кліпи, заборонені треки";
   }
@@ -1397,6 +1420,40 @@
     });
   });
 
+  // ── тексти повідомлень у чат ──
+  let msgs = null;
+  async function loadMessages() {
+    try { msgs = await api("/api/messages", null, "GET"); } catch { return; }
+    renderMessages();
+  }
+  function renderMessages() {
+    if (!msgs) return;
+    const focused = document.activeElement && document.activeElement.dataset.msg;
+    if (focused) {  // не чіпаємо поле, яке зараз редагують, — лише приклади
+      msgs.items.forEach((m) => { const p = document.querySelector(`[data-prev="${m.key}"]`); if (p) p.textContent = m.preview; });
+      return;
+    }
+    $("msgList").innerHTML = msgs.items.map((m) => `<div class="set col msg">
+        <div class="mh"><label class="lb" for="msg_${m.key}">${esc(m.label)}</label>
+          <button type="button" class="lnk" data-msg-reset="${m.key}" ${m.text ? "" : "hidden"}>Стандартний</button></div>
+        <textarea id="msg_${m.key}" rows="2" maxlength="${msgs.max}" data-msg="${m.key}" placeholder="${esc(m.default)}">${esc(m.text || m.default)}</textarea>
+        <div class="vars">Можна: ${m.vars.split(", ").map((v) => `<code>{${esc(v)}}</code>`).join(" ")}</div>
+        <div class="prev"><b>pipabobik:</b> <span data-prev="${m.key}">${esc(m.preview)}</span></div>
+      </div>`).join("");
+  }
+  async function saveMessage(key, text) {
+    try { msgs = await api("/api/messages", { messages: { [key]: text } }); toast(text.trim() ? "Текст збережено" : "Повернуто стандартний текст"); } catch {}
+    renderMessages();
+  }
+  $("msgList").addEventListener("change", (e) => {
+    const t = e.target.closest("[data-msg]");
+    if (!t) return;
+    const m = msgs.items.find((x) => x.key === t.dataset.msg);
+    saveMessage(t.dataset.msg, m && t.value.trim() === m.default ? "" : t.value);  // як стандартний — не зберігаємо окремо
+  });
+  $("msgList").addEventListener("focusout", (e) => { if (e.target.closest("[data-msg]")) setTimeout(renderMessages, 0); });
+  $("msgList").addEventListener("click", (e) => { const b = e.target.closest("[data-msg-reset]"); if (b) saveMessage(b.dataset.msgReset, ""); });
+
   // ── перегляд віджета: живий лише поки відкрито розділ ──
   let wSrc = "";
   function widgetPreview(on) {
@@ -1425,9 +1482,8 @@
   function renderPlaylists() {
     if (!pls) return;
     const sel = $("fbSelect");
-    sel.innerHTML = pls.items.map((x) => `<option value="${esc(x.id)}">«${esc(x.name)}»</option>`).join("") + `<option value="">тиша</option>`;
+    sel.innerHTML = pls.items.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("") + `<option value="">Тиша</option>`;
     sel.value = pls.active;
-    $("fbLabel").textContent = pls.active ? "Потім — фоновий плейлист" : "Коли черга скінчиться —";
     $("hintPls").textContent = pls.active ? `зараз: ${plName(pls.active)}${pls.shuffle ? " · перемішувати" : ""}` : "вимкнено — коли черга порожня, тиша";
     $("plsList").innerHTML = pls.items.map((x) => `<li class="pl ${x.id === pls.active ? "on" : ""}">
         <span class="nm">${esc(x.name)}<small>${x.id === "LM" ? "з YouTube Music" : ""}</small></span>
@@ -1662,7 +1718,7 @@
       restartFrom = s.boot || "?";
       $("offTitle").textContent = "Оновлюю pipabobik…";
       $("offText").textContent = "Зараз відкриється вікно «Оновлення pipabobik»: там видно, як нова версія завантажується з GitHub і встановлюється. "
-        + (s.obs_restart ? "OBS закриється й відкриється знову." : "Застосунок відкриється сам.");
+        + "OBS не закривається, застосунок відкриється сам.";
       $("offline").classList.add("show");
     }
     if (u.just_updated && !shownUpdated) {
@@ -1673,15 +1729,13 @@
   }
   async function startUpdate() {
     const s = state || {};
-    const how = s.streaming
-      ? "Йде трансляція, тож OBS не закриватиму: оновиться лише бот, музика замовкне на кілька секунд. Скрипт OBS оновиться, коли наступного разу відкриєте OBS."
-      : s.obs_restart
-        ? "pipabobik завантажить нову версію з GitHub, закриє OBS і відкриє його знову (до хвилини). Черга й налаштування збережуться."
-        : "pipabobik завантажить нову версію з GitHub і перезапуститься. Черга й налаштування збережуться.";
+    // OBS оновлення не чіпає; перезапускається лише pipabobik — і лише якщо ви погодитесь
+    const how = "pipabobik завантажить нову версію з GitHub і перезапуститься: бот і це вікно закриються й відкриються знову, музика замовкне на кілька секунд. "
+      + "OBS не закриватиметься" + (s.streaming ? " — трансляція йде далі" : "") + ". Черга й налаштування збережуться.";
     const u = s.update || {};
     const ver = u.latest ? ` до версії ${u.latest}` : "";
     const what = u.message ? `Нове: ${u.message}\n\n` : "";
-    if (!await ask(`Оновити pipabobik${ver}?`, what + how, "Оновити")) return;
+    if (!await ask(`Оновити pipabobik${ver}?`, what + how, "Оновити й перезапустити")) return;
     try { await api("/api/update", { action: "install" }); } catch {}
   }
   $("updGo").onclick = startUpdate;

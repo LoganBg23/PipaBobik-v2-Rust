@@ -6,6 +6,7 @@ pub mod commands;
 pub mod config;
 pub mod errors;
 pub mod jukebox;
+pub mod messages;
 pub mod music;
 pub mod paths;
 pub mod player;

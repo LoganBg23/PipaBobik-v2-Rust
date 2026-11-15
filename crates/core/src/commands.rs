@@ -86,6 +86,13 @@ impl Commands {
         (self.say)(text.into(), Some(m.message_id.clone())).await;
     }
 
+    /// Відповідь за шаблоном з налаштувань (⚙ → «Повідомлення в чат»); {нік} підставляється завжди.
+    async fn reply_msg(&self, m: &ChatMessage, key: &str, mut vars: Vec<(&str, String)>) {
+        vars.push(("нік", m.display_name.clone()));
+        let text = crate::messages::render(&self.cfg.read().unwrap(), key, &vars);
+        self.reply(m, text).await;
+    }
+
     pub async fn handle(&self, m: ChatMessage) {
         if !m.text.starts_with('!') {
             return;
@@ -134,7 +141,7 @@ impl Commands {
         };
         if candidates.is_empty() {
             let short: String = arg.chars().take(60).collect();
-            return self.reply(m, format!("нічого не знайшов за «{short}» 🤷 Спробуй «виконавець — назва»")).await;
+            return self.reply_msg(m, "not_found", vec![("запит", short)]).await;
         }
         let mut chosen = None;
         let mut first_reason = None;
@@ -161,16 +168,16 @@ impl Commands {
         if let Some(r) = self.jb.check_user(&m.user_id, false, Some(&lim)) {
             return self.reply(m, r).await;
         }
-        let dur = if chosen.duration > 0 { format!(" ({})", fmt_time(chosen.duration as f64)) } else { String::new() };
+        let dur = if chosen.duration > 0 { fmt_time(chosen.duration as f64) } else { String::new() };
         let label = chosen.label();
         let pos = self.jb.add(chosen, &m.user_id, &m.display_name, false);
-        if self.jb.is_active() {
+        let when = if self.jb.is_active() {
             let wait = self.jb.eta(pos);
-            let when = if wait < 15 { "грає наступним".to_string() } else { format!("заграє через {}", minutes(wait)) };
-            self.reply(m, format!("🎶 додано {label}{dur} — №{pos} у черзі, {when}")).await;
+            if wait < 15 { "грає наступним".to_string() } else { format!("заграє через {}", minutes(wait)) }
         } else {
-            self.reply(m, format!("🎶 додано {label}{dur} — №{pos} у черзі, заграє, коли почнеться музика")).await;
-        }
+            "заграє, коли почнеться музика".to_string()
+        };
+        self.reply_msg(m, "added", vec![("трек", label), ("тривалість", dur), ("місце", pos.to_string()), ("коли", when)]).await;
     }
 
     async fn cmd_now(&self, m: &ChatMessage) {
@@ -178,27 +185,27 @@ impl Commands {
             if !self.jb.is_active() {
                 return self.reply(m, "музика зараз вимкнена 🔇").await;
             }
-            return self.reply(m, format!("зараз тиша 🤫 Замов щось: {} назва", self.first("request"))).await;
+            return self.reply_msg(m, "now_empty", vec![("замовити", self.first("request"))]).await;
         };
         let pos = fmt_time(self.jb.player.position());
-        let dur = if t.duration > 0 { format!(" / {}", fmt_time(t.duration as f64)) } else { String::new() };
-        let who = if t.source == "request" { format!(" · замовив(ла) @{}", t.requested_by) } else { " · з плейлиста стрімера".into() };
-        self.reply(m, format!("🎧 зараз грає {} [{pos}{dur}]{who} → {}", t.label(), t.url())).await;
+        let dur = if t.duration > 0 { fmt_time(t.duration as f64) } else { String::new() };
+        let who = if t.source == "request" { format!("замовив(ла) @{}", t.requested_by) } else { "з плейлиста стримерки".into() };
+        self.reply_msg(m, "now", vec![("трек", t.label()), ("позиція", pos), ("тривалість", dur), ("хто", who), ("посилання", t.url())]).await;
     }
 
     async fn cmd_queue(&self, m: &ChatMessage) {
         let q = self.jb.queue();
         if q.is_empty() {
-            return self.reply(m, format!("черга порожня — замов: {} назва 🎵", self.first("request"))).await;
+            return self.reply_msg(m, "queue_empty", vec![("замовити", self.first("request"))]).await;
         }
         let items: Vec<String> = q.iter().take(4).enumerate().map(|(i, t)| format!("{}) {} (@{})", i + 1, t.label(), t.requested_by)).collect();
         let more = if q.len() > 4 { format!(" …і ще {}", q.len() - 4) } else { String::new() };
-        self.reply(m, format!("далі: {}{more}", items.join(" · "))).await;
+        self.reply_msg(m, "queue", vec![("список", format!("{}{more}", items.join(" · "))), ("кількість", q.len().to_string())]).await;
     }
 
     async fn cmd_wrong(&self, m: &ChatMessage) {
         match self.jb.remove_last_by(&m.user_id) {
-            Some(t) => self.reply(m, format!("прибрав з черги {} 👌", t.label())).await,
+            Some(t) => self.reply_msg(m, "wrong", vec![("трек", t.label())]).await,
             None => self.reply(m, "у тебе немає треків у черзі").await,
         }
     }
@@ -277,7 +284,7 @@ impl Commands {
                     if self.jb.skip(&format!("команда {cmd} від {}", m.login), Some(id)).await.is_none() {
                         return self.reply(m, "трек уже змінився — спробуй ще раз").await;
                     }
-                    self.reply(m, format!("⏭ скіпнуто {}", t.label())).await
+                    self.reply_msg(m, "skip", vec![("трек", t.label())]).await
                 }
             };
         }
@@ -285,20 +292,20 @@ impl Commands {
             return self.reply(m, "трек щойно пропустили — наступний уже вмикається ⏳").await;
         }
         match self.jb.skip(&format!("команда {cmd} від {}", m.login), None).await {
-            Some(t) => self.reply(m, format!("⏭ скіпнуто {}", t.label())).await,
+            Some(t) => self.reply_msg(m, "skip", vec![("трек", t.label())]).await,
             None => self.reply(m, "зараз нічого не грає").await,
         }
     }
 
     async fn cmd_volume(&self, m: &ChatMessage, arg: &str) {
         if arg.is_empty() {
-            return self.reply(m, format!("🔊 гучність: {}", self.jb.player.volume())).await;
+            return self.reply_msg(m, "volume", vec![("гучність", self.jb.player.volume().to_string())]).await;
         }
         let Ok(v) = arg.trim_end_matches('%').trim().parse::<i64>() else {
             return self.reply(m, format!("формат: {} 0-100", self.first("volume"))).await;
         };
         self.jb.set_volume(v).await;
-        self.reply(m, format!("🔊 гучність: {}", self.jb.player.volume())).await;
+        self.reply_msg(m, "volume", vec![("гучність", self.jb.player.volume().to_string())]).await;
     }
 
     async fn cmd_seek(&self, m: &ChatMessage, arg: &str) {
@@ -311,8 +318,8 @@ impl Commands {
         let Some(pos) = self.jb.seek(target).await else {
             return self.reply(m, "не вдалося перемотати 😕").await;
         };
-        let dur = if t.duration > 0 { format!(" / {}", fmt_time(t.duration as f64)) } else { String::new() };
-        self.reply(m, format!("⏩ {}: {}{dur}", t.label(), fmt_time(pos))).await;
+        let dur = if t.duration > 0 { fmt_time(t.duration as f64) } else { String::new() };
+        self.reply_msg(m, "seek", vec![("трек", t.label()), ("позиція", fmt_time(pos)), ("тривалість", dur)]).await;
     }
 
     async fn cmd_pause(&self, m: &ChatMessage) {
@@ -348,7 +355,7 @@ impl Commands {
             None => self.reply(m, format!("напиши ім'я: {} виконавець", self.first("ban_artist"))).await,
             Some((removed, _)) => {
                 let q = if removed > 0 { format!(", з черги прибрано треків: {removed}") } else { String::new() };
-                self.reply(m, format!("🚫 {name} більше не гратиме на каналі{q}")).await
+                self.reply_msg(m, "ban_artist", vec![("виконавець", name), ("прибрано", q)]).await
             }
         }
     }
@@ -357,7 +364,7 @@ impl Commands {
     async fn cmd_ban(&self, m: &ChatMessage, arg: &str) {
         if arg.is_empty() {
             return match self.jb.ban_current().await {
-                Some(t) => self.reply(m, format!("🚫 {} більше не гратиме на каналі", t.label())).await,
+                Some(t) => self.reply_msg(m, "ban", vec![("трек", t.label())]).await,
                 None => self.reply(m, format!("зараз нічого не грає. Щоб заборонити конкретну пісню: {} назва", self.first("ban"))).await,
             };
         }
@@ -367,7 +374,7 @@ impl Commands {
             } else {
                 self.jb.ban_song(&t);
             }
-            return self.reply(m, format!("🚫 {} більше не гратиме на каналі", t.label())).await;
+            return self.reply_msg(m, "ban", vec![("трек", t.label())]).await;
         }
         // у черзі й історії немає — шукаємо в YouTube Music
         let results = self.music.search(arg, true).await;
@@ -375,7 +382,7 @@ impl Commands {
             return self.reply(m, format!("не знайшов «{arg}» 🤔 Спробуй: виконавець — назва")).await;
         };
         self.jb.ban_song(&t);
-        self.reply(m, format!("🚫 {} більше не гратиме на каналі", t.label())).await;
+        self.reply_msg(m, "ban", vec![("трек", t.label())]).await;
     }
 }
 
