@@ -221,6 +221,12 @@
   .row .rt { display: flex; align-items: center; gap: 4px; }
   .row .eta, .row .note2 { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .row .hov { display: none; }
+  /* перестановка треків */
+  .row.q { cursor: grab; }
+  .row.q:active { cursor: grabbing; }
+  .row.q.drag { opacity: .4; }
+  .row.q.over-before { box-shadow: inset 0 2px 0 var(--hot); }
+  .row.q.over-after { box-shadow: inset 0 -2px 0 var(--hot); }
   /* трек, що грає: першим у черзі, поки не дограє */
   .row.now { background: rgba(255, 61, 154, .1); box-shadow: inset 3px 0 0 var(--hot); }
   .row.now:hover, .row.now:focus-within { background: rgba(255, 61, 154, .16); }
@@ -564,7 +570,7 @@
       </div>
       <div class="gtitle">Музика</div>
       <div class="card">
-        <button class="set ico" data-go="pg-playlists" data-k="фонові плейлисти перемішувати гучність вирівнювати звук">
+        <button class="set ico" data-go="pg-playlists" data-k="фонові плейлисти перемішувати гучність запуску вирівнювати звук тема різдвяні довільний">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h12M3 11h12M3 16h7M16 14v6M16 14l5-1.5"/></svg>
           <span><span class="lb">Фонові плейлисти</span><small id="hintPls">грають, коли черга порожня</small></span>
           <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
@@ -583,9 +589,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4.5 20c.8-3.6 3.8-5.5 7.5-5.5s6.7 1.9 7.5 5.5"/></svg>
           <span><span class="lb">Акаунти: Twitch і Google</span><small id="hintAcc">вхід бота, YouTube Music, програвач</small></span>
           <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
-        <button class="set ico" data-go="pg-obs" data-k="obs віджет рожевий адреса звук">
+        <button class="set ico" data-go="pg-obs" data-k="obs віджет рожевий адреса звук прозорість">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5h18v12H3zM8 21h8M12 17v4"/></svg>
-          <span><span class="lb">OBS і віджет</span><small>адреса віджета, рожевий віджет, звук</small></span>
+          <span><span class="lb">OBS і віджет</span><small>адреса віджета, рожевий віджет, прозорість</small></span>
           <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg></button>
         <button class="set ico" data-go="pg-update" data-k="оновлення версія github">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg>
@@ -694,6 +700,12 @@
       </div>
       <div class="gtitle">Звук</div>
       <div class="card">
+        <div class="set col"><label for="startVol"><span class="lb">Гучність під час запуску</span><small>з такою гучністю pipabobik вмикається щоразу, хоч би як її міняли під час стріму</small></label>
+          <div class="inline" style="align-items:center;gap:10px">
+            <input type="range" min="0" max="100" step="1" id="startVol" data-key="player.volume" style="flex:1" aria-describedby="startVolV">
+            <b id="startVolV" style="width:36px;text-align:right;font-variant-numeric:tabular-nums">60</b>
+            <button type="button" class="btn sm" id="startVolNow" title="Взяти гучність, яка стоїть зараз">Як зараз</button>
+          </div></div>
         <div class="set"><label for="normalize"><span class="lb">Вирівнювати гучність</span><small>з наступного треку</small></label>
           <span class="switch"><input type="checkbox" id="normalize" data-key="player.normalize"><span></span></span></div>
       </div>
@@ -764,6 +776,11 @@
         <div class="set col"><div class="wprev" id="wprev"><iframe id="wframe" title="Приклад віджета" tabindex="-1"></iframe></div></div>
         <div class="set"><label for="widget_pink"><span class="lb">Рожевий віджет</span><small>завжди фірмовий рожевий, а не колір обкладинки</small></label>
           <span class="switch"><input type="checkbox" id="widget_pink" data-key="widget.pink"><span></span></span></div>
+        <div class="set col"><label for="wTransp"><span class="lb">Прозорість віджета</span><small>0% — як задумано, більше — крізь фон віджета видно трансляцію</small></label>
+          <div class="inline" style="align-items:center;gap:10px">
+            <input type="range" min="0" max="100" step="5" id="wTransp" data-key="widget.transparency" style="flex:1">
+            <b id="wTranspV" style="width:40px;text-align:right;font-variant-numeric:tabular-nums">0%</b>
+          </div></div>
         <div class="set"><span><span class="lb">Адреса для OBS</span><small id="widgetUrl">Джерело «Браузер», 520 × 160</small></span>
           <button class="btn" id="copyWidget">Копіювати</button></div>
       </div>
@@ -845,11 +862,20 @@
       im.src = url;
     });
   }
+  // Кадр з відео YouTube: hqdefault — 4:3 з чорними смугами згори й знизу; беремо 16:9 без смуг
+  // (найбільший, що є: maxresdefault → hq720 → mqdefault). Квадратна обкладинка YouTube Music — першою.
+  const ytVid = (u) => (String(u || "").match(/i\.ytimg\.com\/vi(?:_webp)?\/([\w-]{11})\//) || [])[1] || "";
+  function coverTries(t) {
+    if (!t) return [];
+    const out = [];
+    if (t.cover && !ytVid(t.cover)) out.push(t.cover);
+    const vid = ytVid(t.cover) || (t.video_id && !/^demo/.test(t.video_id) ? t.video_id : "");
+    if (vid) for (const n of ["maxresdefault", "hq720", "mqdefault"]) out.push(`https://i.ytimg.com/vi/${vid}/${n}.jpg`);
+    if (!out.length && t.cover) out.push(t.cover);
+    return out;
+  }
   async function pickCover(t) {
-    if (!t) return "";
-    const tries = [t.cover];
-    if (t.video_id && !/^demo/.test(t.video_id)) tries.push(`https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg`);
-    for (const u of tries) if (u && await probeCover(u)) return u;
+    for (const u of coverTries(t)) if (await probeCover(u)) return u;
     return "";
   }
 
@@ -918,7 +944,8 @@
   }
   // обкладинка, під нею кадр з відео, а якщо жодна не завантажилась — маленька платівка
   const VINYL = "radial-gradient(circle, #ff3d9a 0 3px, #12030d 3.5px 5px, #2d0b23 5.5px 100%)";
-  const thumbs = (t) => [t.cover, t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : ""].filter(Boolean).map(cssUrl).concat(VINYL).join(", ");
+  // у рядках — mqdefault (16:9, без смуг): маленька картинка, і є в кожного відео
+  const thumbs = (t) => { const v = ytVid(t.cover) || t.video_id || ""; return [t.cover && !ytVid(t.cover) ? t.cover : "", v && !/^demo/.test(v) ? `https://i.ytimg.com/vi/${v}/mqdefault.jpg` : t.cover].filter(Boolean).map(cssUrl).concat(VINYL).join(", "); };
   let state = null, receivedAt = 0, currentId, volDrag = false;  // currentId спершу undefined — перший стан завжди малює картку
   paint(PINK);
 
@@ -1105,6 +1132,7 @@
     return Math.max(0, n.duration - el);
   }
   function renderQueue(s) {
+    if (dragFrom !== null) return;  // поки тягнуть трек — список не перемальовуємо
     // трек, що грає, теж у черзі — першим; зникає, коли дограє
     const n = s.now, total = (s.queue_len || 0) + (n ? 1 : 0);
     $("qn").textContent = total ? `· ${total}` : "";
@@ -1124,10 +1152,12 @@
       return row(t, `<span class="eta">${eta}</span>
         ${i ? `<button class="btn sm hov" data-q="next" data-i="${i}" title="Зіграти наступним">Наступним</button>` : ""}
         ${banBtn(t)}
-        <button class="sq hov" data-q="remove" data-i="${i}" title="Прибрати з черги" aria-label="Прибрати з черги">${xIcon}</button>`);
+        <button class="sq hov" data-q="remove" data-i="${i}" title="Прибрати з черги" aria-label="Прибрати з черги">${xIcon}</button>`)
+        .replace('<li class="row">', `<li class="row q" draggable="true" tabindex="0" data-qi="${i}" aria-label="${esc(t.title)}, №${i + 1} у черзі" title="Перетягніть, щоб переставити (або Alt+↑/↓)">`);
     }).join("")
       : n ? `<li class="empty" style="padding:14px 12px">Далі поки нічого — замовляйте в чаті або через пошук вище.</li>`
         : `<li class="empty"><b>Черга порожня</b>Глядачі замовляють командою в чаті, а ви — через рядок пошуку вище.</li>`);
+    if (refocus !== null) { const r = qList.querySelector(`[data-qi="${refocus}"]`); refocus = null; if (r) r.focus(); }
   }
 
   function renderHistory(s) {
@@ -1340,6 +1370,56 @@
     if (add) addResult(+add.dataset.i, add.dataset.add);
   });
 
+  // ── перестановка треків у черзі: перетягнути мишею або Alt+↑/↓ ──
+  let dragFrom = null, dropAt = null, refocus = null;
+  const qList = $("queue");
+  const clearMarks = () => qList.querySelectorAll(".over-before, .over-after").forEach((x) => x.classList.remove("over-before", "over-after"));
+  function moveTrack(from, to) {
+    const n = state ? state.queue.length : 0;
+    if (from === to || to < 0 || to >= n) return;
+    control("move", { index: from, to }).then(() => toast(to === 0 ? "Заграє наступним" : `Тепер №${to + 1} у черзі`)).catch(() => {});
+  }
+  function endDrag(commit) {
+    if (dragFrom === null) return;
+    const from = dragFrom, at = dropAt;
+    dragFrom = dropAt = null;
+    clearMarks();
+    qList.querySelectorAll(".drag").forEach((x) => x.classList.remove("drag"));
+    if (commit && at !== null) moveTrack(from, at > from ? at - 1 : at);
+    if (state) renderQueue(state);
+  }
+  qList.addEventListener("dragstart", (e) => {
+    const r = e.target.closest(".row.q");
+    if (!r) return;
+    dragFrom = +r.dataset.qi;
+    r.classList.add("drag");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(dragFrom));
+  });
+  qList.addEventListener("dragover", (e) => {
+    if (dragFrom === null) return;
+    const r = e.target.closest(".row.q");
+    if (!r) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const b = r.getBoundingClientRect(), after = e.clientY > b.top + b.height / 2;
+    clearMarks();
+    r.classList.add(after ? "over-after" : "over-before");
+    dropAt = +r.dataset.qi + (after ? 1 : 0);
+  });
+  qList.addEventListener("drop", (e) => { e.preventDefault(); endDrag(true); });
+  qList.addEventListener("dragend", () => endDrag(false));
+  qList.addEventListener("keydown", (e) => {
+    if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    const r = e.target.closest(".row.q");
+    if (!r) return;
+    e.preventDefault();
+    const i = +r.dataset.qi;
+    const to = i + (e.key === "ArrowUp" ? -1 : 1);
+    moveTrack(i, to);
+    refocus = to;  // після оновлення списку фокус лишається на тому ж треку
+  });
+
   // ── черга / історія / результати пошуку ──
   function showList(which) {
     $("v-queue").hidden = which !== "queue";
@@ -1461,8 +1541,21 @@
       else if (Array.isArray(v)) el.value = v.join(", ");
       else el.value = el.dataset.scale ? Math.round(v / +el.dataset.scale) : (v ?? "");
     });
+    rangeLabels();
     if (screen === "pg-obs") widgetPreview(true);
   }
+  function rangeLabels() {
+    $("startVolV").textContent = $("startVol").value;
+    $("wTranspV").textContent = `${$("wTransp").value}%`;
+  }
+  $("startVol").addEventListener("input", rangeLabels);
+  $("wTransp").addEventListener("input", rangeLabels);
+  $("startVolNow").onclick = () => {
+    if (!state) return;
+    $("startVol").value = state.volume;
+    rangeLabels();
+    $("startVol").dispatchEvent(new Event("change"));
+  };
   function queueSave(sec, k, v) {
     (pending[sec] ||= {})[k] = v;
     clearTimeout(saveTimer);
@@ -1473,8 +1566,9 @@
       const [sec, k] = el.dataset.key.split(".");
       let v = el.type === "checkbox" ? el.checked : el.value;
       if (el.type === "number") v = Math.max(0, +v || 0) * (+el.dataset.scale || 1);
+      if (el.type === "range") v = +el.value;
       queueSave(sec, k, v);
-      if (el.id === "widget_pink") widgetPreview(true);
+      if (el.id === "widget_pink" || el.id === "wTransp") widgetPreview(true);
     });
   });
 
@@ -1516,7 +1610,7 @@
   let wSrc = "";
   function widgetPreview(on) {
     const f = $("wframe");
-    const src = on ? `/widget?demo=1${$("widget_pink").checked ? "&pink=1" : ""}` : "";
+    const src = on ? `/widget?demo=1${$("widget_pink").checked ? "&pink=1" : ""}&transparency=${$("wTransp").value}` : "";
     if (src === wSrc) return;
     wSrc = src;
     if (!src) { f.removeAttribute("src"); return; }

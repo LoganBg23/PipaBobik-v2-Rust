@@ -441,10 +441,10 @@ const SETTINGS: &[(&str, &[(&str, Ty)])] = &[
         ],
     ),
     ("chat", &[("announce_tracks", Ty::Bool), ("greet_on_stream_start", Ty::Bool)]),
-    ("player", &[("normalize", Ty::Bool)]),
+    ("player", &[("normalize", Ty::Bool), ("volume", Ty::Int)]),
     ("google", &[("fallback_playlist", Ty::Str), ("fallback_shuffle", Ty::Bool)]),
     ("twitch", &[("helpers", Ty::List)]),
-    ("widget", &[("pink", Ty::Bool)]),
+    ("widget", &[("pink", Ty::Bool), ("transparency", Ty::Int)]),
 ];
 
 async fn api_settings_get(State(bot): S, h: HeaderMap) -> Response {
@@ -479,6 +479,8 @@ async fn api_settings_set(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
                         _ => None,
                     };
                     match n {
+                        // відсотки: гучність запуску, прозорість віджета
+                        Some(n) if matches!(*k, "volume" | "transparency") => json!(n.clamp(0.0, 100.0) as i64),
                         Some(n) => json!(n.max(0.0) as i64),
                         None => return err(StatusCode::BAD_REQUEST, format!("{sec}.{k}: невірне значення")),
                     }

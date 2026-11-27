@@ -1025,7 +1025,7 @@ mod tests {
         assert!(t[0].cover.ends_with("=w544-h544"));
         assert_eq!(t[1].artist, "Artist X");
         assert_eq!(t[1].duration, 3723);
-        assert_eq!(t[1].cover, "https://i.ytimg.com/vi/zzzzzzzzzzz/hqdefault.jpg");
+        assert_eq!(t[1].cover, "https://i.ytimg.com/vi/zzzzzzzzzzz/mqdefault.jpg");
     }
 
     #[test]

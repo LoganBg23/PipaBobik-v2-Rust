@@ -88,7 +88,7 @@ pub fn extract_video_id(text: &str) -> Option<String> {
 ///
 /// Обкладинки YouTube Music (googleusercontent) — найбільші, до 544px. Кадри з відео (i.ytimg.com)
 /// приходять із тимчасовим підписом (?sqp=…) і часто як maxresdefault, якого в багатьох відео
-/// немає, — тому беремо постійне посилання hqdefault, воно є в кожного відео.
+/// немає, — тому беремо постійне посилання mqdefault (16:9, без чорних смуг), воно є в кожного відео.
 pub fn best_cover(thumbnails: Option<&Value>, video_id: &str) -> String {
     let mut items: Vec<&Value> = thumbnails.and_then(|t| t.as_array()).map(|a| a.iter().collect()).unwrap_or_default();
     let area = |t: &Value| t["width"].as_u64().unwrap_or(0) * t["height"].as_u64().unwrap_or(0);
@@ -100,7 +100,7 @@ pub fn best_cover(thumbnails: Option<&Value>, video_id: &str) -> String {
         }
     }
     if !video_id.is_empty() {
-        return format!("https://i.ytimg.com/vi/{video_id}/hqdefault.jpg");
+        return format!("https://i.ytimg.com/vi/{video_id}/mqdefault.jpg");
     }
     for t in &items {
         let url = t["url"].as_str().unwrap_or("").split('?').next().unwrap_or("");
@@ -125,7 +125,7 @@ mod tests {
                         {"url": "https://lh3.googleusercontent.com/abc=w120-h120-l90", "width": 120, "height": 120}]);
         assert_eq!(best_cover(Some(&th), "x"), "https://lh3.googleusercontent.com/abc=w544-h544-l90");
         let th = json!([{"url": "https://i.ytimg.com/vi/id/maxresdefault.jpg?sqp=xx", "width": 1280, "height": 720}]);
-        assert_eq!(best_cover(Some(&th), "id"), "https://i.ytimg.com/vi/id/hqdefault.jpg");
+        assert_eq!(best_cover(Some(&th), "id"), "https://i.ytimg.com/vi/id/mqdefault.jpg");
         assert_eq!(fmt_time(125.7), "2:05");
         let t = Track::from_json(&json!({"video_id": "a", "title": "T", "artist": "A", "extra": 1})).unwrap();
         assert_eq!(t.label(), "«T» — A");

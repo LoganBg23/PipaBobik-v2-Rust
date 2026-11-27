@@ -221,7 +221,7 @@ impl Jukebox {
             for t in st.queue.iter_mut() {
                 // старі тимчасові посилання на кадри з відео з часом перестають працювати
                 if t.cover.contains("i.ytimg.com") {
-                    t.cover = format!("https://i.ytimg.com/vi/{}/hqdefault.jpg", t.video_id);
+                    t.cover = format!("https://i.ytimg.com/vi/{}/mqdefault.jpg", t.video_id);
                 }
             }
             if !st.queue.is_empty() {

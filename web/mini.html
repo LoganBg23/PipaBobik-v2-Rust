@@ -93,8 +93,20 @@
     setTimeout(() => fin(false), 8000);
     im.src = url;
   });
+  // Кадр з відео YouTube: hqdefault — 4:3 з чорними смугами згори й знизу; беремо 16:9 без смуг
+  // (найбільший, що є: maxresdefault → hq720 → mqdefault). Квадратна обкладинка YouTube Music — першою.
+  const ytVid = (u) => (String(u || "").match(/i\.ytimg\.com\/vi(?:_webp)?\/([\w-]{11})\//) || [])[1] || "";
+  function coverTries(t) {
+    if (!t) return [];
+    const out = [];
+    if (t.cover && !ytVid(t.cover)) out.push(t.cover);
+    const vid = ytVid(t.cover) || (t.video_id && !/^demo/.test(t.video_id) ? t.video_id : "");
+    if (vid) for (const n of ["maxresdefault", "hq720", "mqdefault"]) out.push(`https://i.ytimg.com/vi/${vid}/${n}.jpg`);
+    if (!out.length && t.cover) out.push(t.cover);
+    return out;
+  }
   async function setCover(n) {
-    const urls = n ? [n.cover, n.video_id && `https://i.ytimg.com/vi/${n.video_id}/hqdefault.jpg`].filter(Boolean) : [];
+    const urls = coverTries(n);
     let url = "";
     for (const u of urls) { if (await probe(u)) { url = u; break; } }
     if (!state || (state.now && state.now.video_id) !== (n && n.video_id)) return;

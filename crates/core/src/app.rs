@@ -260,7 +260,11 @@ impl Bot {
         st["obs_restart"] = json!(false); // оновлення OBS не чіпає
         st["boot"] = json!(self.boot); // змінюється після перезапуску — застосунок оновить сторінку
         st["fallback"] = json!(playlist_id(&self.cfg.read().unwrap().str("google", "fallback_playlist")).unwrap_or_default());
-        st["widget"] = json!({"pink": self.cfg.read().unwrap().bool("widget", "pink")}); // віджет завжди рожевий
+        {
+            let cfg = self.cfg.read().unwrap();
+            // віджет: завжди рожевий; прозорість фону у відсотках (0 — як задумано)
+            st["widget"] = json!({"pink": cfg.bool("widget", "pink"), "transparency": cfg.raw["widget"]["transparency"].as_i64().unwrap_or(0).clamp(0, 100)});
+        }
         st
     }
 
