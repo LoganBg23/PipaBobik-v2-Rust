@@ -63,6 +63,7 @@
   .scroll::-webkit-scrollbar { width: 6px; }
   .scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
   .scroll:hover::-webkit-scrollbar-thumb { background: var(--line); }
+  .main-scroll::-webkit-scrollbar-thumb, .list-wrap::-webkit-scrollbar-thumb { background: #5a2a4d; }
 
   /* ── шапка ── */
   .head { display: flex; align-items: center; gap: 8px; padding: 12px 16px 8px; flex: none; }
@@ -207,7 +208,7 @@
   .results-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px 20px; flex: none; border-bottom: 1px solid var(--raised); }
   .results-head b { flex: 1; font-weight: 600; }
   .results-head .hint { font-size: 12px; color: var(--muted); }
-  .list-wrap { flex: 1 1 auto; min-height: 168px; overflow-y: auto; scrollbar-gutter: stable; padding: 6px 2px 8px 8px; }
+  .list-wrap { flex: 1 1 auto; min-height: 200px; overflow-y: auto; scrollbar-gutter: stable; padding: 6px 2px 8px 8px; }
   .list { list-style: none; }
 
   /* рядок треку */
@@ -232,7 +233,7 @@
   .row.now.on .eq b:nth-child(3) { animation-delay: -.7s; }
   @keyframes eq { 50% { transform: scaleY(1); } }
   body.calm .eq b { animation-play-state: paused; }
-  .row:hover .hov, .row:focus-within .hov { display: inline-flex; }
+  .row:hover .hov, .row:focus-within .hov { display: inline-flex; align-items: center; justify-content: center; }
   .row:hover .eta, .row:focus-within .eta { display: none; }
   .sq { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; background: var(--surface); color: var(--pearl); flex: none; }
   .sq:hover { background: var(--line); }
@@ -248,6 +249,9 @@
   .fb span { white-space: nowrap; }
   .fb select { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: rgba(0, 0, 0, .25); color: var(--pearl); font-weight: 600; cursor: pointer; }
   .fb select option { background: var(--surface); }
+  .fb .shuf { width: 32px; height: 32px; color: var(--muted); }
+  .fb .shuf[aria-pressed="true"] { color: var(--hot); }
+  .fb .shuf[aria-pressed="true"] svg { fill: none; }
   .tail { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; min-height: 56px; padding: 6px 8px; color: var(--muted); font-size: 13px; }
   .tail .ph { width: 40px; height: 40px; border-radius: 6px; border: 1px dashed #6f4363; display: grid; place-items: center; }
   .tail .ph svg { width: 16px; height: 16px; }
@@ -353,6 +357,10 @@
   .pl .nm small { display: inline; margin-left: 6px; font-weight: 400; color: var(--muted); }
   .pl.on { box-shadow: inset 0 0 0 1px var(--hot); }
   .pl .tag { font-size: 12px; font-weight: 600; color: var(--hot); padding: 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { height: 28px; padding: 0 11px; border-radius: 999px; background: var(--raised); font-size: 12.5px; font-weight: 600; color: var(--soft); }
+  .chips button:hover { background: var(--line); color: var(--pearl); }
+  .pl .nm small.inf { display: block; margin: 0; }
   .addpl { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
   .addpl #plLink { grid-column: 1 / -1; }
 
@@ -402,6 +410,22 @@
   .offline.show { display: grid; }
   .offline h2 { font-family: var(--display); font-size: 20px; font-weight: 600; color: var(--blush); margin-bottom: 8px; }
 
+  /* невисоке вікно (ноутбук): картка стає горизонтальною — обкладинка та сама 150 px, текст праворуч,
+     щоб під нею лишалось місце для черги */
+  @media (max-height: 940px) and (min-width: 401px) {
+    .player { display: grid; grid-template-columns: 150px minmax(0, 1fr); grid-template-rows: auto auto auto 1fr; column-gap: 16px; padding: 14px; }
+    .player > .deck { grid-row: 1 / 5; width: 150px; }
+    .player .vinyl { left: 6px; }
+    .player > .who { margin-top: 2px; }
+    .player .t-title { font-size: 19px; }
+    .player > .progress { align-self: end; grid-template-columns: 30px 1fr 30px; gap: 8px; margin-top: 8px; }
+    .player > .controls, .player > .fb { grid-column: 1 / -1; }
+    .player > .controls { margin-top: 12px; }
+    .player > .fb { margin-top: 10px; padding-top: 10px; }
+    .head { padding-top: 8px; padding-bottom: 4px; }
+    .banner { padding: 7px 10px; margin-top: 2px; margin-bottom: 2px; }
+    .banner .bt span { display: none; }
+  }
   @media (max-width: 400px) {
     .deck { height: 120px; } .sleeve { width: 120px; height: 120px; } .vinyl { left: 70px; width: 110px; height: 110px; }
     .vol b { display: none; }
@@ -423,7 +447,7 @@
   <div class="screens">
   <!-- ═══ ефір ═══ -->
   <main class="screen" id="scr-main">
-   <div class="scroll" style="display:flex;flex-direction:column;scrollbar-gutter:auto">
+   <div class="scroll main-scroll" style="display:flex;flex-direction:column;scrollbar-gutter:auto">
     <div class="head">
       <div class="logo">pipa<b>bobik</b></div>
       <button class="status" id="status" title=""><i></i><span id="statusText">…</span></button>
@@ -478,6 +502,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h12M3 11h12M3 16h7M16 14v6M16 14l5-1.5"/></svg>
         <span id="fbLabel">Коли черга порожня</span>
         <select id="fbSelect" aria-label="Фоновий плейлист, коли черга порожня"></select>
+        <button type="button" class="ib shuf" id="fbShuffle" aria-pressed="true" aria-label="Довільний порядок" title="Довільний порядок"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.5c2 0 3.2 1 4.3 2.8l2.4 4.4c1 1.8 2.3 2.8 4.3 2.8H21M18 14l3 3-3 3M3 17h3.5c1.4 0 2.4-.5 3.2-1.4M13.3 8.4c.8-.9 1.8-1.4 3.2-1.4H21M18 4l3 3-3 3"/></svg></button>
       </label>
     </section>
 
@@ -643,6 +668,19 @@
     <div class="bar2"><button class="ib" data-back aria-label="Назад до налаштувань"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg></button><h1>Фонові плейлисти</h1></div>
     <div class="scroll"><div class="pad">
       <p class="lead">Грають, коли черга порожня. Перемкнути можна й на головному екрані — під кнопками керування.</p>
+      <div class="gtitle">Тема музики</div>
+      <div class="card">
+        <div class="set col">
+          <span><span class="lb">Що грати фоном</span><small>Напишіть тему — бот знайде плейлист у YouTube Music і ввімкне його в довільному порядку</small></span>
+          <form class="inline" id="themeForm">
+            <input class="tin" type="text" id="themeQ" placeholder="Різдвяні, лоуфай, рок 2000-х…" autocomplete="off" maxlength="60" aria-label="Тема фонової музики">
+            <button class="btn pri" type="submit">Увімкнути</button>
+          </form>
+          <div class="chips" id="themeIdeas"></div>
+          <ul class="pls" id="themeRes" hidden></ul>
+        </div>
+      </div>
+      <div class="gtitle">Мої плейлисти</div>
       <div class="card">
         <div class="set col"><ul class="pls" id="plsList"></ul></div>
         <div class="set col"><span class="lb">Додати плейлист</span>
@@ -651,7 +689,7 @@
             <input class="tin" type="text" id="plName" placeholder="Назва (необов'язково)" autocomplete="off" aria-label="Назва плейлиста">
             <button class="btn pri" type="submit">Додати</button>
           </form></div>
-        <div class="set"><label for="plShuffle"><span class="lb">Перемішувати фоновий плейлист</span></label>
+        <div class="set"><label for="plShuffle"><span class="lb">Довільний порядок</span><small>треки фонового плейлиста грають упереміш</small></label>
           <span class="switch"><input type="checkbox" id="plShuffle"><span></span></span></div>
       </div>
       <div class="gtitle">Звук</div>
@@ -1502,8 +1540,11 @@
   function renderPlaylists() {
     if (!pls) return;
     const sel = $("fbSelect");
-    sel.innerHTML = pls.items.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("") + `<option value="">Тиша</option>`;
+    sel.innerHTML = pls.items.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("") + `<option value="">Тиша</option><option value="__theme">Інша тема…</option>`;
     sel.value = pls.active;
+    $("fbShuffle").setAttribute("aria-pressed", pls.shuffle ? "true" : "false");
+    $("fbShuffle").title = pls.shuffle ? "Довільний порядок — увімкнено" : "По порядку (натисніть — упереміш)";
+    if (document.activeElement !== $("themeQ") && !$("themeQ").value) $("themeQ").placeholder = pls.theme ? `Зараз: ${pls.theme}` : "Різдвяні, лоуфай, рок 2000-х…";
     $("hintPls").textContent = pls.active ? `зараз: ${plName(pls.active)}${pls.shuffle ? " · перемішувати" : ""}` : "вимкнено — коли черга порожня, тиша";
     $("plsList").innerHTML = pls.items.map((x) => `<li class="pl ${x.id === pls.active ? "on" : ""}">
         <span class="nm">${esc(x.name)}<small>${x.id === "LM" ? "з YouTube Music" : ""}</small></span>
@@ -1512,7 +1553,50 @@
       </li>`).join("") || `<li class="empty">Додайте плейлист — він гратиме, коли черга порожня.</li>`;
     $("plShuffle").checked = !!pls.shuffle;
   }
-  $("fbSelect").onchange = (e) => { const id = e.target.value; plAction({ action: "select", id }, () => id ? `Фон: ${plName(id)}` : "Коли черга порожня — тиша"); };
+  $("fbSelect").onchange = (e) => {
+    const id = e.target.value;
+    if (id === "__theme") { e.target.value = pls ? pls.active : ""; go("pg-playlists"); $("themeQ").focus(); return; }
+    plAction({ action: "select", id }, () => id ? `Фон: ${plName(id)}` : "Коли черга порожня — тиша");
+  };
+  $("fbShuffle").onclick = (e) => { e.preventDefault(); const v = !(pls && pls.shuffle); plAction({ action: "shuffle", value: v }, v ? "Довільний порядок" : "По порядку"); };
+
+  // ── тема фонової музики ──
+  const IDEAS = ["Різдвяні", "Новорічні", "Українська естрада", "Лоуфай", "Рок 2000-х", "Синтвейв", "Для ігор"];
+  $("themeIdeas").innerHTML = IDEAS.map((t) => `<button type="button" data-idea="${esc(t)}">${esc(t)}</button>`).join("");
+  $("themeIdeas").onclick = (e) => { const b = e.target.closest("[data-idea]"); if (b) { $("themeQ").value = b.dataset.idea; $("themeForm").requestSubmit(); } };
+  let themeFound = null;
+  function renderTheme() {
+    const r = $("themeRes");
+    r.hidden = !themeFound;
+    if (!themeFound) return;
+    r.innerHTML = `<li class="lead" style="padding:4px 2px 2px">Знайдено на тему «${esc(themeFound.query)}». Не те — увімкніть інший:</li>` + themeFound.items.map((x) => {
+      const on = pls && x.id === pls.active;
+      return `<li class="pl ${on ? "on" : ""}"><span class="nm" title="${esc(x.title)}">${esc(x.title)}<small class="inf">${esc(x.info || "")}</small></span>
+        ${on ? '<span class="tag">грає у фоні</span>' : `<button type="button" class="btn sm" data-theme-pick="${esc(x.id)}" data-title="${esc(x.title)}">Увімкнути</button>`}</li>`;
+    }).join("");
+  }
+  $("themeForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const q = $("themeQ").value.trim();
+    if (!q) return $("themeQ").focus();
+    const btn = $("themeForm").querySelector("button");
+    btn.disabled = true; btn.textContent = "Шукаю…";
+    try {
+      const r = await api("/api/playlists", { action: "theme", query: q });
+      pls = r; themeFound = r.found;
+      toast(`Фон: ${plName(r.active)} · упереміш`);
+      $("themeQ").value = "";
+    } catch {}
+    btn.disabled = false; btn.textContent = "Увімкнути";
+    renderPlaylists(); renderTheme();
+  };
+  $("themeRes").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-theme-pick]");
+    if (!b) return;
+    const name = `${themeFound.query.charAt(0).toUpperCase()}${themeFound.query.slice(1)} · ${b.dataset.title}`.slice(0, 60);
+    await plAction({ action: "add", link: b.dataset.themePick, name, select: true }, () => `Фон: ${b.dataset.title}`);
+    renderTheme();
+  });
   $("plsList").addEventListener("click", async (e) => {
     const s = e.target.closest("[data-pl-select]");
     if (s) return plAction({ action: "select", id: s.dataset.plSelect }, () => `Фон: ${plName(s.dataset.plSelect)}`);

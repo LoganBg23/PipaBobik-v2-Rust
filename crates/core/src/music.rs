@@ -35,6 +35,8 @@ const COOKIES_TTL: Duration = Duration::from_secs(6 * 3600);
 /// Фільтри пошуку YouTube Music («Пісні» / «Відео»), як у ytmusicapi.
 const PARAMS_SONGS: &str = "EgWKAQIIAWoMEA4QChADEAQQCRAF";
 const PARAMS_VIDEOS: &str = "EgWKAQIQAWoMEA4QChADEAQQCRAF";
+/// Плейлисти YouTube Music: добірки самого YouTube Music, плейлисти людей, усі разом.
+const PARAMS_PLAYLISTS: [&str; 3] = ["EgeKAQQoADgBagwQDhAKEAMQBRAJEAQ=", "EgeKAQQoAEABagwQDhAKEAMQBRAJEAQ=", "EgWKAQIoAWoMEA4QChADEAQQCRAF"];
 
 static DURATION_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d{1,2}(:\d{2}){1,2}$").unwrap());
 static PLAYLIST_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[?&]list=([A-Za-z0-9_-]+)").unwrap());
@@ -69,6 +71,61 @@ fn page_type(run: &Value) -> &str {
     run["navigationEndpoint"]["browseEndpoint"]["browseEndpointContextSupportedConfigs"]["browseEndpointContextMusicConfig"]["pageType"]
         .as_str()
         .unwrap_or("")
+}
+
+/// Знайдений плейлист (для теми фонової музики).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct FoundPlaylist {
+    pub id: String,
+    pub title: String,
+    /// «YouTube Music • 50 songs» тощо — як показує YouTube Music.
+    pub info: String,
+}
+
+fn find_playlist_id(v: &Value) -> Option<String> {
+    match v {
+        Value::Object(m) => {
+            if let Some(id) = m.get("playlistId").and_then(Value::as_str) {
+                return Some(id.to_string());
+            }
+            if let Some(b) = m.get("browseId").and_then(Value::as_str) {
+                if let Some(id) = b.strip_prefix("VL") {
+                    return Some(id.to_string());
+                }
+            }
+            m.values().find_map(find_playlist_id)
+        }
+        Value::Array(a) => a.iter().find_map(find_playlist_id),
+        _ => None,
+    }
+}
+
+/// Результати пошуку плейлистів YouTube Music → список плейлистів.
+pub fn parse_playlists(data: &Value, limit: usize) -> Vec<FoundPlaylist> {
+    let mut items = Vec::new();
+    collect_items(data, &mut items);
+    let mut seen = std::collections::HashSet::new();
+    items
+        .into_iter()
+        .filter_map(|it| {
+            // пісні мають videoId — це не плейлист
+            if it["playlistItemData"]["videoId"].is_string() {
+                return None;
+            }
+            let id = it["navigationEndpoint"]["browseEndpoint"]["browseId"]
+                .as_str()
+                .and_then(|b| b.strip_prefix("VL"))
+                .map(String::from)
+                .or_else(|| find_playlist_id(&it["overlay"]))
+                .or_else(|| find_playlist_id(it))?;
+            let cols = it["flexColumns"].as_array()?;
+            let col = |i: usize| cols.get(i).map(|c| runs_text(&c["musicResponsiveListItemFlexColumnRenderer"]["text"])).unwrap_or_default();
+            let title = col(0);
+            let info = col(1).trim_start_matches("Playlist • ").trim_start_matches("Плейлист • ").to_string();
+            (!title.is_empty() && seen.insert(id.clone())).then_some(FoundPlaylist { id, title, info })
+        })
+        .take(limit)
+        .collect()
 }
 
 /// Рядок результату пошуку YouTube Music → трек.
@@ -666,6 +723,40 @@ impl MusicSource {
         found
     }
 
+    /// Плейлисти на тему («Різдвяні», «лоуфай»): спершу добірки YouTube Music, потім плейлисти людей,
+    /// а якщо YouTube Music нічого не дав — пошук плейлистів YouTube через yt-dlp.
+    pub async fn search_playlists(&self, query: &str) -> Vec<FoundPlaylist> {
+        let mut out: Vec<FoundPlaylist> = Vec::new();
+        for params in PARAMS_PLAYLISTS {
+            match self.innertube("search", json!({"query": query, "params": params}), false).await {
+                Ok(v) => {
+                    for p in parse_playlists(&v, 8) {
+                        if !out.iter().any(|x| x.id == p.id) {
+                            out.push(p);
+                        }
+                    }
+                }
+                Err(e) => tracing::warn!("Пошук плейлистів YT Music не вдався: {e}"),
+            }
+            if out.len() >= 6 {
+                break;
+            }
+        }
+        if out.is_empty() {
+            let url = format!("https://www.youtube.com/results?search_query={}&sp=EgIQAw%3D%3D", urlencoding::encode(query));
+            if let Some(v) = self.ytdlp_json(&["--flat-playlist", "-J", "--playlist-end", "8", &url], 60).await {
+                for e in v["entries"].as_array().into_iter().flatten() {
+                    let id = e["id"].as_str().or_else(|| e["url"].as_str().and_then(|u| PLAYLIST_RE.captures(u).and_then(|c| c.get(1)).map(|m| m.as_str()))).unwrap_or("");
+                    if id.len() > 10 && !out.iter().any(|x| x.id == id) {
+                        out.push(FoundPlaylist { id: id.into(), title: e["title"].as_str().unwrap_or("Плейлист").into(), info: e["channel"].as_str().or(e["uploader"].as_str()).unwrap_or("YouTube").into() });
+                    }
+                }
+            }
+        }
+        out.truncate(6);
+        out
+    }
+
     /// Готує все наперед, щоб перший «!трек» і перший трек не чекали на ініціалізацію.
     pub async fn warmup(&self) {
         self.ensure_ytdlp().await;
@@ -862,6 +953,34 @@ pub async fn download(http: &reqwest::Client, url: &str, dest: &Path) -> Result<
     f.flush().await.map_err(|e| e.to_string())?;
     drop(f);
     std::fs::rename(&tmp, dest).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod playlist_search_tests {
+    use super::*;
+
+    #[test]
+    fn parses_playlist_results_and_skips_songs() {
+        let pl = |browse: &str, title: &str, info: &str| json!({"musicResponsiveListItemRenderer": {
+            "navigationEndpoint": {"browseEndpoint": {"browseId": browse}},
+            "flexColumns": [
+                {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": title}]}}},
+                {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Playlist"}, {"text": " • "}, {"text": info}]}}}
+            ]}});
+        let overlay_only = json!({"musicResponsiveListItemRenderer": {
+            "overlay": {"musicItemThumbnailOverlayRenderer": {"content": {"musicPlayButtonRenderer": {"playNavigationEndpoint": {"watchPlaylistEndpoint": {"playlistId": "RDCLAK5uy_xmas123456"}}}}}},
+            "flexColumns": [{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Christmas Hits"}]}}}]}});
+        let song = json!({"musicResponsiveListItemRenderer": {"playlistItemData": {"videoId": "abcdefghijk"},
+            "flexColumns": [{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Щедрик"}]}}}]}});
+        let data = json!({"contents": {"tabbedSearchResultsRenderer": {"tabs": [{"tabRenderer": {"content": {"sectionListRenderer": {"contents": [
+            {"musicShelfRenderer": {"contents": [pl("VLPLxmas0000000001", "Різдвяні пісні", "YouTube Music • 60 songs"), song, overlay_only, pl("VLPLxmas0000000001", "дубль", "")]}}
+        ]}}}}]}}});
+        let got = parse_playlists(&data, 8);
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0], FoundPlaylist { id: "PLxmas0000000001".into(), title: "Різдвяні пісні".into(), info: "YouTube Music • 60 songs".into() });
+        assert_eq!(got[1].id, "RDCLAK5uy_xmas123456");
+        assert_eq!(got[1].title, "Christmas Hits");
+    }
 }
 
 #[cfg(test)]

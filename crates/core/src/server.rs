@@ -589,7 +589,24 @@ fn playlists_payload(bot: &Bot) -> Value {
         "items": bot.playlists.lock().unwrap().items,
         "active": playlist_id(&cfg.str("google", "fallback_playlist")).unwrap_or_default(),
         "shuffle": cfg.raw["google"]["fallback_shuffle"].as_bool().unwrap_or(true),
+        "theme": cfg.str("google", "fallback_theme"),
     })
+}
+
+/// «різдвяні» + «Christmas Hits» → «Різдвяні · Christmas Hits» (до 60 знаків).
+fn theme_name(theme: &str, title: &str) -> String {
+    let mut c = theme.trim().chars();
+    let t: String = c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default();
+    let full = if title.to_lowercase().contains(&theme.trim().to_lowercase()) { title.to_string() } else { format!("{t} · {title}") };
+    full.chars().take(60).collect()
+}
+
+fn set_shuffle(bot: &Bot, v: bool) {
+    bot.cfg.write().unwrap().set("google", "fallback_shuffle", json!(v));
+    let mut m = Map::new();
+    m.insert("fallback_shuffle".into(), json!(v));
+    bot.save_config(&[("google".into(), m)]);
+    bot.jukebox.reset_fallback(); // перемішаємо заново з наступного фонового треку
 }
 
 async fn api_playlists_get(State(bot): S, h: HeaderMap) -> Response {
@@ -657,13 +674,33 @@ async fn api_playlists_set(State(bot): S, h: HeaderMap, b: Bytes) -> Response {
             let name: String = as_str(&d["name"]).trim().chars().take(60).collect();
             bot.playlists.lock().unwrap().rename(&as_str(&d["id"]), &name);
         }
+        // тема: «Різдвяні» → знаходимо плейлист у YouTube Music і одразу вмикаємо його фоном у довільному порядку
+        "theme" => {
+            let q: String = as_str(&d["query"]).trim().chars().take(60).collect();
+            if q.is_empty() {
+                return err(StatusCode::BAD_REQUEST, "Напишіть тему, наприклад «Різдвяні»");
+            }
+            let found = bot.music.search_playlists(&q).await;
+            let Some(first) = found.first().cloned() else {
+                return err(StatusCode::BAD_REQUEST, &format!("Не знайшов плейлистів на тему «{q}». Спробуйте інакше: «різдвяні пісні» чи «christmas»"));
+            };
+            let name = theme_name(&q, &first.title);
+            bot.playlists.lock().unwrap().add(&first.id, &name);
+            set_shuffle(&bot, true);
+            {
+                bot.cfg.write().unwrap().set("google", "fallback_theme", json!(q));
+                let mut m = Map::new();
+                m.insert("fallback_theme".into(), json!(q));
+                bot.save_config(&[("google".into(), m)]);
+            }
+            select_playlist(&bot, &first.id).await;
+            tracing::info!("Тема фонової музики «{q}»: {} ({})", first.title, first.id);
+            let mut out = playlists_payload(&bot);
+            out["found"] = json!({"query": q, "items": found});
+            return Json(out).into_response();
+        }
         "shuffle" => {
-            let v = truthy(&d["value"]);
-            bot.cfg.write().unwrap().set("google", "fallback_shuffle", json!(v));
-            let mut m = Map::new();
-            m.insert("fallback_shuffle".into(), json!(v));
-            bot.save_config(&[("google".into(), m)]);
-            bot.jukebox.reset_fallback(); // перемішаємо заново з наступного фонового треку
+            set_shuffle(&bot, truthy(&d["value"]));
         }
         _ => return err(StatusCode::BAD_REQUEST, "unknown action"),
     }
