@@ -46,7 +46,7 @@
   }
   /* напівпрозорий фон у кольорах обкладинки: два шари, новий плавно проявляється поверх старого */
   .tint { position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity 1.1s ease; will-change: opacity; }
-  .tint.on { opacity: var(--bg, 1); }
+  .tint.on { opacity: 1; }
   /* прозорий фон: рамка й тінь теж слабшають, а текст отримує власну тінь, щоб читався на трансляції */
   .card { --bg: 1; border-color: rgba(255, 255, 255, calc(.09 * var(--bg))); box-shadow: 0 10px 28px rgba(0, 0, 0, calc(.28 * var(--bg))); }
   .card.see .title, .card.see .artist, .card.see .time { text-shadow: 0 1px 3px rgba(0, 0, 0, .75), 0 0 8px rgba(0, 0, 0, .45); }
@@ -172,16 +172,22 @@
   let tintOn = $("tintA");
   // «Рожевий віджет» у застосунку: колір завжди фірмовий, не з обкладинки
   let forcePink = qs.get("pink") === "1", coverColor = PINK, painted = null;
-  function paint(c) {
+  // щільність фону з застосунку: 100 — суцільний один колір без прозорості, 0 — без фону, 80 — стандартний вигляд
+  let opacity = 80;
+  function paint(c, force) {
     coverColor = c;
     if (forcePink) c = PINK;
-    if (painted === c) return;
+    if (painted === c && !force) return;
     painted = c;
     const { h } = c;
     const s = c.s < 0.08 ? 0 : Math.min(1, c.s);
-    // темний напівпрозорий фон того ж відтінку + м'яке сяйво від обкладинки
-    const bg = `radial-gradient(190px 150px at 56px 50%, ${hsla(h, Math.min(s, 0.9), 0.45, 0.62)}, transparent 72%),
-                linear-gradient(100deg, ${hsla(h, Math.min(s, 0.75), 0.22, 0.82)}, ${hsla(h, Math.min(s, 0.6), 0.14, 0.78)})`;
+    const k = opacity / 80;  // 80 — як задумано
+    const bg = opacity >= 100
+      // суцільний один колір
+      ? hsla(h, Math.min(s, 0.75), 0.2, 1)
+      // темний напівпрозорий фон того ж відтінку + м'яке сяйво від обкладинки
+      : `radial-gradient(190px 150px at 56px 50%, ${hsla(h, Math.min(s, 0.9), 0.45, Math.min(1, 0.62 * k))}, transparent 72%),
+         linear-gradient(100deg, ${hsla(h, Math.min(s, 0.75), 0.22, Math.min(1, 0.82 * k))}, ${hsla(h, Math.min(s, 0.6), 0.14, Math.min(1, 0.78 * k))})`;
     const next = tintOn === $("tintA") ? $("tintB") : $("tintA");
     next.style.background = bg;
     next.classList.add("on");
@@ -192,16 +198,17 @@
     card.style.setProperty("--accent-soft", s === 0 ? "rgba(255,255,255,.16)" : hsla(h, Math.max(s, 0.6), 0.7, 0.2));
   }
 
-  // прозорість фону віджета з налаштувань застосунку (0 — як задумано, 100 — без фону)
-  let transp = -1;
-  function setTransparency(t) {
-    t = Math.max(0, Math.min(100, +t || 0));
-    if (t === transp) return;
-    transp = t;
-    card.style.setProperty("--bg", (1 - t / 100).toFixed(2));
-    card.classList.toggle("see", t >= 40);
+  // прозорість віджета з налаштувань застосунку: 100% — суцільний колір, 0% — без фону
+  function setOpacity(o) {
+    o = o === undefined || o === null || o === "" ? 80 : Math.max(0, Math.min(100, +o));
+    if (o === opacity && card.dataset.op) return;
+    opacity = o;
+    card.dataset.op = o;
+    card.style.setProperty("--bg", Math.min(1, o / 80).toFixed(2));
+    card.classList.toggle("see", o <= 45);  // фону мало — текст із тінню
+    paint(coverColor, true);
   }
-  setTransparency(qs.get("transparency") || 0);
+  setOpacity(qs.get("opacity"));
 
   // ── обкладинка ──
   // Обкладинки йдуть через бота (/cover): так з них можна взяти колір.
@@ -332,7 +339,7 @@
 
   function apply(s) {
     state = s; receivedAt = performance.now();
-    setTransparency(qs.has("transparency") ? +qs.get("transparency") : (s.widget && s.widget.transparency) || 0);
+    setOpacity(qs.has("opacity") ? qs.get("opacity") : s.widget && s.widget.opacity);
     const pink = qs.get("pink") === "1" || !!(s.widget && s.widget.pink);
     if (pink !== forcePink) { forcePink = pink; paint(coverColor); }  // плавно перефарбовується
     render(); tick();

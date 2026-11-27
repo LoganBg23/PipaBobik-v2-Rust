@@ -41,7 +41,7 @@ pub fn defaults() -> Value {
         "chat": {"announce_tracks": false, "greet_on_stream_start": true},
         "server": {"port": 17777},
         "help": {"text": DEFAULT_HELP, "hidden": []},
-        "widget": {"pink": false, "transparency": 0},
+        "widget": {"pink": false, "opacity": 80},
         "update": {"auto_check": true}
     })
 }

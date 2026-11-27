@@ -509,6 +509,8 @@ fn run_panel() {
             let win = builder
                 .initialization_script(BRIDGE)
                 // посилання назовні (YouTube, вхід у Twitch) — у звичайному браузері
+                // перетягування всередині сторінки (черга) — сторінці, а не системному прийманню файлів
+                .disable_drag_drop_handler()
                 .on_navigation(navigation(app.handle().clone(), "main"))
                 .on_new_window(|url, _features| {
                     open_url(url.as_str());

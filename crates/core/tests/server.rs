@@ -200,11 +200,13 @@ async fn chat_messages_are_editable() {
 #[tokio::test(flavor = "multi_thread")]
 async fn startup_volume_and_widget_transparency_are_settings() {
     let t = T::new(CONFIGURED).await;
-    let (s, _) = t.post("/api/settings", json!({"player": {"volume": 140}, "widget": {"transparency": 35}})).await;
+    let (_, st) = t.get("/api/state").await;
+    assert_eq!(st["widget"]["opacity"], 80); // стандартно — як задумано
+    let (s, _) = t.post("/api/settings", json!({"player": {"volume": 140}, "widget": {"opacity": 35}})).await;
     assert_eq!(s, 200);
     let (_, v) = t.get("/api/settings").await;
     assert_eq!(v["player"]["volume"], 100); // не більше 100
-    assert_eq!(v["widget"]["transparency"], 35);
+    assert_eq!(v["widget"]["opacity"], 35);
     let (_, st) = t.get("/api/state").await;
-    assert_eq!(st["widget"]["transparency"], 35);
+    assert_eq!(st["widget"]["opacity"], 35);
 }

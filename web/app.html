@@ -222,7 +222,8 @@
   .row .eta, .row .note2 { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .row .hov { display: none; }
   /* перестановка треків */
-  .row.q { cursor: grab; }
+  .row.q { cursor: grab; user-select: none; touch-action: pan-y; }
+  body.dragging, body.dragging * { cursor: grabbing !important; user-select: none; }
   .row.q:active { cursor: grabbing; }
   .row.q.drag { opacity: .4; }
   .row.q.over-before { box-shadow: inset 0 2px 0 var(--hot); }
@@ -776,10 +777,10 @@
         <div class="set col"><div class="wprev" id="wprev"><iframe id="wframe" title="Приклад віджета" tabindex="-1"></iframe></div></div>
         <div class="set"><label for="widget_pink"><span class="lb">Рожевий віджет</span><small>завжди фірмовий рожевий, а не колір обкладинки</small></label>
           <span class="switch"><input type="checkbox" id="widget_pink" data-key="widget.pink"><span></span></span></div>
-        <div class="set col"><label for="wTransp"><span class="lb">Прозорість віджета</span><small>0% — як задумано, більше — крізь фон віджета видно трансляцію</small></label>
+        <div class="set col"><label for="wTransp"><span class="lb">Прозорість віджета</span><small>100% — суцільний один колір, менше — прозоріше, 0% — без фону. Стандартно 80%</small></label>
           <div class="inline" style="align-items:center;gap:10px">
-            <input type="range" min="0" max="100" step="5" id="wTransp" data-key="widget.transparency" style="flex:1">
-            <b id="wTranspV" style="width:40px;text-align:right;font-variant-numeric:tabular-nums">0%</b>
+            <input type="range" min="0" max="100" step="5" id="wTransp" data-key="widget.opacity" style="flex:1">
+            <b id="wTranspV" style="width:40px;text-align:right;font-variant-numeric:tabular-nums">80%</b>
           </div></div>
         <div class="set"><span><span class="lb">Адреса для OBS</span><small id="widgetUrl">Джерело «Браузер», 520 × 160</small></span>
           <button class="btn" id="copyWidget">Копіювати</button></div>
@@ -1153,7 +1154,7 @@
         ${i ? `<button class="btn sm hov" data-q="next" data-i="${i}" title="Зіграти наступним">Наступним</button>` : ""}
         ${banBtn(t)}
         <button class="sq hov" data-q="remove" data-i="${i}" title="Прибрати з черги" aria-label="Прибрати з черги">${xIcon}</button>`)
-        .replace('<li class="row">', `<li class="row q" draggable="true" tabindex="0" data-qi="${i}" aria-label="${esc(t.title)}, №${i + 1} у черзі" title="Перетягніть, щоб переставити (або Alt+↑/↓)">`);
+        .replace('<li class="row">', `<li class="row q" tabindex="0" data-qi="${i}" aria-label="${esc(t.title)}, №${i + 1} у черзі" title="Перетягніть, щоб переставити (або Alt+↑/↓)">`);
     }).join("")
       : n ? `<li class="empty" style="padding:14px 12px">Далі поки нічого — замовляйте в чаті або через пошук вище.</li>`
         : `<li class="empty"><b>Черга порожня</b>Глядачі замовляють командою в чаті, а ви — через рядок пошуку вище.</li>`);
@@ -1379,7 +1380,16 @@
     if (from === to || to < 0 || to >= n) return;
     control("move", { index: from, to }).then(() => toast(to === 0 ? "Заграє наступним" : `Тепер №${to + 1} у черзі`)).catch(() => {});
   }
+  // Перетягування на подіях вказівника, не HTML5 drag-and-drop: у вікні застосунку на Windows
+  // HTML5-перетягування перехоплює система (приймання файлів), і до сторінки воно не доходить.
+  let press = null;  // {row, from, y, id} — натиснули, але ще не потягли
+  const listBox = qList.closest(".list-wrap");
+  let scrollTimer = null;
   function endDrag(commit) {
+    clearInterval(scrollTimer); scrollTimer = null;
+    if (press && press.row.hasPointerCapture && press.row.hasPointerCapture(press.id)) press.row.releasePointerCapture(press.id);
+    press = null;
+    document.body.classList.remove("dragging");
     if (dragFrom === null) return;
     const from = dragFrom, at = dropAt;
     dragFrom = dropAt = null;
@@ -1388,27 +1398,41 @@
     if (commit && at !== null) moveTrack(from, at > from ? at - 1 : at);
     if (state) renderQueue(state);
   }
-  qList.addEventListener("dragstart", (e) => {
-    const r = e.target.closest(".row.q");
-    if (!r) return;
-    dragFrom = +r.dataset.qi;
-    r.classList.add("drag");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(dragFrom));
-  });
-  qList.addEventListener("dragover", (e) => {
-    if (dragFrom === null) return;
-    const r = e.target.closest(".row.q");
-    if (!r) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const b = r.getBoundingClientRect(), after = e.clientY > b.top + b.height / 2;
+  function markAt(x, y) {
+    const r = document.elementFromPoint(x, y);
+    const row = r && r.closest && r.closest("#queue .row.q");
     clearMarks();
-    r.classList.add(after ? "over-after" : "over-before");
-    dropAt = +r.dataset.qi + (after ? 1 : 0);
+    if (!row) return;
+    const b = row.getBoundingClientRect(), after = y > b.top + b.height / 2;
+    row.classList.add(after ? "over-after" : "over-before");
+    dropAt = +row.dataset.qi + (after ? 1 : 0);
+  }
+  qList.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest("button, a, input, select")) return;
+    const row = e.target.closest(".row.q");
+    if (!row) return;
+    press = { row, from: +row.dataset.qi, y: e.clientY, id: e.pointerId };
   });
-  qList.addEventListener("drop", (e) => { e.preventDefault(); endDrag(true); });
-  qList.addEventListener("dragend", () => endDrag(false));
+  qList.addEventListener("pointermove", (e) => {
+    if (!press) return;
+    if (dragFrom === null) {
+      if (Math.abs(e.clientY - press.y) < 6) return;  // ще не тягнуть — просто клік
+      dragFrom = press.from;
+      press.row.classList.add("drag");
+      press.row.setPointerCapture(press.id);
+      document.body.classList.add("dragging");
+    }
+    e.preventDefault();
+    markAt(e.clientX, e.clientY);
+    // біля краю списку — прокручуємо
+    const b = listBox.getBoundingClientRect(), edge = 36;
+    const dir = e.clientY < b.top + edge ? -1 : e.clientY > b.bottom - edge ? 1 : 0;
+    clearInterval(scrollTimer); scrollTimer = null;
+    if (dir) { const x = e.clientX, y = e.clientY; scrollTimer = setInterval(() => { listBox.scrollTop += dir * 12; markAt(x, y); }, 30); }
+  });
+  qList.addEventListener("pointerup", () => endDrag(true));
+  qList.addEventListener("pointercancel", () => endDrag(false));
+  qList.addEventListener("lostpointercapture", () => { if (dragFrom !== null) endDrag(true); });
   qList.addEventListener("keydown", (e) => {
     if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
     const r = e.target.closest(".row.q");
@@ -1610,7 +1634,7 @@
   let wSrc = "";
   function widgetPreview(on) {
     const f = $("wframe");
-    const src = on ? `/widget?demo=1${$("widget_pink").checked ? "&pink=1" : ""}&transparency=${$("wTransp").value}` : "";
+    const src = on ? `/widget?demo=1${$("widget_pink").checked ? "&pink=1" : ""}&opacity=${$("wTransp").value}` : "";
     if (src === wSrc) return;
     wSrc = src;
     if (!src) { f.removeAttribute("src"); return; }
